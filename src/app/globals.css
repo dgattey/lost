@@ -127,3 +127,29 @@
     @apply font-sans;
   }
 }
+
+/* Expedition color utilities */
+.expedition-yellow {
+  --expedition-color: #f59e0b;
+  --expedition-bg: #f59e0b20;
+}
+.expedition-blue {
+  --expedition-color: #3b82f6;
+  --expedition-bg: #3b82f620;
+}
+.expedition-white {
+  --expedition-color: #d1d5db;
+  --expedition-bg: #d1d5db20;
+}
+.expedition-green {
+  --expedition-color: #22c55e;
+  --expedition-bg: #22c55e20;
+}
+.expedition-red {
+  --expedition-color: #ef4444;
+  --expedition-bg: #ef444420;
+}
+.expedition-purple {
+  --expedition-color: #8b5cf6;
+  --expedition-bg: #8b5cf620;
+}
