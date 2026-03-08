@@ -246,6 +246,24 @@ export default function Home() {
                 Photo scanning requires an AI API key.
               </p>
             </div>
+
+            <footer className="text-center text-xs text-muted-foreground/70 max-w-xs pt-4 border-t border-border/50 space-y-2">
+              <p>
+                <a
+                  href="https://www.amazon.com/s?k=Lost+Cities+Card+Game"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground transition-colors"
+                >
+                  Buy Lost Cities
+                </a>
+              </p>
+              <p>
+                This app is a fan-made scoring tool and is not affiliated with,
+                endorsed by, or associated with Kosmos, Thames &amp; Kosmos, or
+                the creators of Lost Cities.
+              </p>
+            </footer>
           </div>
         )}
 
