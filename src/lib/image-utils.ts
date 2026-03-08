@@ -4,7 +4,7 @@
  */
 export async function resizeImage(
   file: File,
-  maxDimension = 1568
+  maxDimension = 2048
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

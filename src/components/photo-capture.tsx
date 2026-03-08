@@ -22,7 +22,7 @@ export function PhotoCapture({ onAnalyze, isAnalyzing }: PhotoCaptureProps) {
       if (!file) return;
 
       try {
-        const base64 = await resizeImage(file, 1568);
+        const base64 = await resizeImage(file);
         setImageBase64(base64);
         setPreview(`data:image/jpeg;base64,${base64}`);
       } catch {
