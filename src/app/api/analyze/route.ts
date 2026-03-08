@@ -70,7 +70,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (error instanceof ApiError && error.status === 429) {
+    const isRateLimit =
+      (error instanceof ApiError && error.status === 429) ||
+      message.includes("Retryable HTTP Error");
+    if (isRateLimit) {
       const detail = extractQuotaDetail(message);
       return NextResponse.json(
         {
