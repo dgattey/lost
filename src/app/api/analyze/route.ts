@@ -4,6 +4,30 @@ import { analyzeBoard } from "@/lib/gemini";
 
 export const maxDuration = 60; // Allow up to 60s for AI analysis
 
+/**
+ * Try to pull a human-readable quota identifier out of the Gemini error body
+ * so the user knows which limit they hit (RPM vs RPD vs TPM).
+ */
+function extractQuotaDetail(errorMessage: string): string {
+  try {
+    const body = JSON.parse(errorMessage);
+    const details: Array<{ violations?: Array<{ quotaId?: string }> }> =
+      body?.error?.details ?? body?.details ?? [];
+    for (const d of details) {
+      const quotaId = d?.violations?.[0]?.quotaId;
+      if (quotaId) {
+        if (quotaId.includes("PerDay")) return " Daily request quota exhausted.";
+        if (quotaId.includes("PerMinute"))
+          return " Per-minute request quota exceeded (free tier: 15 RPM).";
+        return ` Quota: ${quotaId}.`;
+      }
+    }
+  } catch {
+    // message wasn't JSON — that's fine
+  }
+  return "";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -47,10 +71,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (error instanceof ApiError && error.status === 429) {
+      const detail = extractQuotaDetail(message);
       return NextResponse.json(
         {
-          error:
-            "Gemini API rate limit exceeded after retries. The free tier allows 15 requests/minute — please wait a moment and try again.",
+          error: `Gemini API rate limit exceeded after retries.${detail} Please wait a moment and try again.`,
         },
         { status: 429 }
       );
