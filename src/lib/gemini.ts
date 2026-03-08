@@ -15,7 +15,7 @@ function getClient(): GoogleGenAI {
   _client = new GoogleGenAI({
     apiKey,
     httpOptions: {
-      timeout: 30_000,
+      timeout: 60_000,
       retryOptions: {
         // Disable SDK-level retries — they fire too fast and burn through
         // the free-tier quota. We handle retries at the application level
@@ -44,24 +44,47 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const ANALYSIS_PROMPT = `You are analyzing a photo of the Lost Cities card game board.
+const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image carefully before answering.
 
-The board shows two players' expeditions arranged by color columns. Each player has their own side of the board. The 5 standard expedition colors are: yellow, blue, white, green, and red. Some boards have a 6th color: purple.
+## Board Layout
 
-For each player and each expedition color visible on the board:
-- Count the number of wager/investment cards (cards showing a handshake symbol with NO number)
-- List all the numbered card values (numbers 2 through 10)
+The Lost Cities board has a central row of colored expedition slots (columns). Each player plays cards on their own side of the board:
+- **Player 1** plays on the **bottom/near side** (closest to the camera).
+- **Player 2** plays on the **top/far side** (farthest from the camera).
 
-Rules for identification:
-- Wager cards have a handshake/investment symbol and NO number on them
-- Numbered cards show a clear number from 2 to 10
-- Cards are overlapped in columns so you can see all the numbers
-- Player 1 is on the bottom/near side of the board (closest to camera)
-- Player 2 is on the top/far side of the board
-- If an expedition has no cards played, set wagerCount to 0 and cardValues to an empty array
-- List card values in ascending order
+Cards are played in columns by color extending outward from the center. Within each column, cards overlap so that the **number or symbol in the upper-left corner** of each card remains visible. The first card is closest to the center of the board; subsequent cards fan outward.
 
-Include all 5 colors (yellow, blue, white, green, red) for each player. If you see a 6th color (purple), include it too.`;
+## Expedition Colors
+
+There are 5 standard colors printed on every board: **yellow, blue, white, green, red**.
+Some editions add a 6th color: **purple**. If you see a purple column on the board, include it.
+
+The columns on the board are typically arranged left-to-right in this order (though it can vary by edition): yellow, blue, white, green, red (and purple if present).
+
+## Card Types
+
+Each expedition color has these cards:
+1. **Wager (investment) cards** — exactly 3 per color. They show a **handshake symbol** and have **no number**. They are often played first in a column.
+2. **Numbered cards** — values **2 through 10** (one of each per color). They display a **large number**.
+
+## How to Read the Board
+
+For each color column on each player's side:
+1. Look at the column of fanned-out cards extending from the center toward that player.
+2. Count cards showing a **handshake/investment symbol with no number** — these are wager cards. Report the total count (0, 1, 2, or 3).
+3. Read every **visible number** on the remaining cards. Numbers appear prominently on each card. Report them as a sorted list.
+4. If a color column has **no cards** on a player's side, report wagerCount 0 and an empty cardValues array.
+
+## Critical Rules
+
+- Cards with numbers on them are ALWAYS numbered cards, never wagers.
+- Wager cards NEVER have a number — only the handshake symbol.
+- Each numbered value (2–10) can appear at most once per color per player.
+- Each color can have at most 3 wager cards per player.
+- Look carefully at partially obscured cards — the upper-left corner number is usually still visible.
+- Cards on the far side of the board (Player 2) may appear upside-down or at an angle from the camera's perspective.
+- Always report card values in ascending numerical order.
+- Include ALL colors visible on the board for BOTH players, even if a column is empty.`;
 
 const EXPEDITION_SCHEMA = {
   type: "object" as const,
@@ -96,10 +119,10 @@ const RESPONSE_SCHEMA = {
 /**
  * Analyze a Lost Cities board photo using Google Gemini Vision.
  *
- * Uses gemini-2.5-flash-lite for its higher free-tier quota (15 RPM,
- * 1 000 RPD) and retries with exponential backoff (10 s → 20 s → 40 s)
- * so that 429 rate-limit windows have time to clear without burning
- * daily quota.
+ * Uses gemini-2.5-flash for superior vision accuracy over flash-lite.
+ * Enables thinking (thinkingBudget) so the model reasons about card
+ * positions before producing structured output. Retries with exponential
+ * backoff (10 s → 20 s → 40 s) on 429 rate-limit errors.
  */
 export async function analyzeBoard(
   imageBase64: string
@@ -119,7 +142,7 @@ export async function analyzeBoard(
 
     try {
       const response = await client.models.generateContent({
-        model: "gemini-2.5-flash-lite",
+        model: "gemini-2.5-flash",
         contents: [
           {
             role: "user",
@@ -132,6 +155,9 @@ export async function analyzeBoard(
         config: {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
+          thinkingConfig: {
+            thinkingBudget: 2048,
+          },
         },
       });
 
