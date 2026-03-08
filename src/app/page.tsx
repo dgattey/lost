@@ -250,7 +250,7 @@ export default function Home() {
             <footer className="text-center text-xs text-muted-foreground/70 max-w-xs pt-4 border-t border-border/50 space-y-2">
               <p>
                 <a
-                  href="https://www.amazon.com/s?k=Lost+Cities+Card+Game"
+                  href="https://store.thamesandkosmos.com/collections/lost-cities"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline underline-offset-2 hover:text-foreground transition-colors"
