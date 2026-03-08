@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ApiError } from "@google/genai";
 import { analyzeBoard } from "@/lib/gemini";
 
 export const maxDuration = 60; // Allow up to 60s for AI analysis
@@ -15,7 +16,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Basic sanity check on base64 length (should be reasonable for an image)
     if (image.length < 100) {
       return NextResponse.json(
         { error: "Image data too small to be valid." },
@@ -39,7 +39,6 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
 
-    // Check for common error types
     if (message.includes("GEMINI_API_KEY")) {
       return NextResponse.json(
         { error: "Server configuration error: API key not set." },
@@ -47,9 +46,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (message.includes("RATE_LIMIT") || message.includes("429")) {
+    if (error instanceof ApiError && error.status === 429) {
       return NextResponse.json(
-        { error: "Rate limit exceeded. Please try again in a moment." },
+        {
+          error:
+            "Gemini API rate limit exceeded after retries. The free tier allows 15 requests/minute — please wait a moment and try again.",
+        },
         { status: 429 }
       );
     }
