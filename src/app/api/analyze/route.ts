@@ -1,7 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ApiError } from "@google/genai";
 import { analyzeBoard } from "@/lib/gemini";
 
 export const maxDuration = 60; // Allow up to 60s for AI analysis
+
+/**
+ * Try to pull a human-readable quota identifier out of the Gemini error body
+ * so the user knows which limit they hit (RPM vs RPD vs TPM).
+ */
+function extractQuotaDetail(errorMessage: string): string {
+  try {
+    const body = JSON.parse(errorMessage);
+    const details: Array<{ violations?: Array<{ quotaId?: string }> }> =
+      body?.error?.details ?? body?.details ?? [];
+    for (const d of details) {
+      const quotaId = d?.violations?.[0]?.quotaId;
+      if (quotaId) {
+        if (quotaId.includes("PerDay")) return " Daily request quota exhausted.";
+        if (quotaId.includes("PerMinute"))
+          return " Per-minute request quota exceeded (free tier: 15 RPM).";
+        return ` Quota: ${quotaId}.`;
+      }
+    }
+  } catch {
+    // message wasn't JSON — that's fine
+  }
+  return "";
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +40,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Basic sanity check on base64 length (should be reasonable for an image)
     if (image.length < 100) {
       return NextResponse.json(
         { error: "Image data too small to be valid." },
@@ -39,7 +63,6 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
 
-    // Check for common error types
     if (message.includes("GEMINI_API_KEY")) {
       return NextResponse.json(
         { error: "Server configuration error: API key not set." },
@@ -47,9 +70,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (message.includes("RATE_LIMIT") || message.includes("429")) {
+    const isRateLimit =
+      (error instanceof ApiError && error.status === 429) ||
+      message.includes("Retryable HTTP Error");
+    if (isRateLimit) {
+      const detail = extractQuotaDetail(message);
       return NextResponse.json(
-        { error: "Rate limit exceeded. Please try again in a moment." },
+        {
+          error: `Gemini API rate limit exceeded after retries.${detail} Please wait a moment and try again.`,
+        },
         { status: 429 }
       );
     }

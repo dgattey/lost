@@ -6,7 +6,17 @@ function getClient() {
   if (!apiKey) {
     throw new Error("Missing GEMINI_API_KEY environment variable");
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      timeout: 30_000,
+      retryOptions: {
+        // 5 total attempts (4 retries) with exponential backoff.
+        // Handles free-tier 429 RESOURCE_EXHAUSTED from the Gemini API.
+        attempts: 5,
+      },
+    },
+  });
 }
 
 const ANALYSIS_PROMPT = `You are analyzing a photo of the Lost Cities card game board.
