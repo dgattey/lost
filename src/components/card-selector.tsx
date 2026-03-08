@@ -48,13 +48,13 @@ export function CardSelector({
         <span className="text-xs text-muted-foreground block mb-1.5">
           Wagers
         </span>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           {Array.from({ length: MAX_WAGERS + 1 }, (_, i) => (
             <button
               key={i}
               onClick={() => onWagerChange(i)}
               className={cn(
-                "h-9 w-9 rounded-lg text-xs font-bold transition-all",
+                "h-11 w-11 rounded-lg text-sm font-bold transition-all",
                 "border border-border",
                 "active:scale-95",
                 i === wagerCount
@@ -76,7 +76,7 @@ export function CardSelector({
         <span className="text-xs text-muted-foreground block mb-1.5">
           Cards
         </span>
-        <div className="grid grid-cols-9 gap-1">
+        <div className="grid grid-cols-9 gap-1.5">
           {CARD_VALUES.map((value) => {
             const isSelected = selectedValues.includes(value);
             return (
@@ -84,7 +84,7 @@ export function CardSelector({
                 key={value}
                 onClick={() => onCardToggle(value)}
                 className={cn(
-                  "h-9 rounded-lg text-xs font-bold transition-all",
+                  "h-11 rounded-lg text-sm font-bold transition-all",
                   "border border-border",
                   "active:scale-95",
                   isSelected
