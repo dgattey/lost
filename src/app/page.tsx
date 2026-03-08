@@ -33,6 +33,7 @@ export default function Home() {
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [boardImage, setBoardImage] = useState<string | null>(null);
   const [player1Data, setPlayer1Data] = useState<ExpeditionData[]>(
     createEmptyExpeditions(false)
   );
@@ -41,6 +42,7 @@ export default function Home() {
   );
 
   const handlePhotoAnalyze = useCallback(async (base64Image: string) => {
+    setBoardImage(`data:image/jpeg;base64,${base64Image}`);
     setIsAnalyzing(true);
     setError(null);
     setStep("analyzing");
@@ -137,6 +139,7 @@ export default function Home() {
     setStep("start");
     setGameResult(null);
     setError(null);
+    setBoardImage(null);
     setPlayer1Data(createEmptyExpeditions(includePurple));
     setPlayer2Data(createEmptyExpeditions(includePurple));
   }, [includePurple]);
@@ -281,6 +284,7 @@ export default function Home() {
             initialPlayer1={player1Data}
             initialPlayer2={player2Data}
             includePurple={includePurple}
+            boardImage={boardImage}
           />
         )}
 
@@ -307,6 +311,7 @@ export default function Home() {
               initialPlayer1={player1Data}
               initialPlayer2={player2Data}
               includePurple={includePurple}
+              boardImage={boardImage}
             />
           </div>
         )}
