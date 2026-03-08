@@ -44,47 +44,96 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image carefully before answering.
+const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image very carefully before answering.
 
-## Board Layout
+## Board Layout — Identifying the Center and Two Sides
 
-The Lost Cities board has a central row of colored expedition slots (columns). Each player plays cards on their own side of the board:
-- **Player 1** plays on the **bottom/near side** (closest to the camera).
-- **Player 2** plays on the **top/far side** (farthest from the camera).
+The Lost Cities board has a **center strip** — a narrow column or row of colored expedition markers/icons. This strip separates the board into two distinct sides. Each player's played cards fan outward from the center strip toward their side of the table.
 
-Cards are played in columns by color extending outward from the center. Within each column, cards overlap so that the **number or symbol in the upper-left corner** of each card remains visible. The first card is closest to the center of the board; subsequent cards fan outward.
+**The center strip may be oriented in any direction depending on how the photo was taken:**
+- It may run **horizontally** (left to right) with cards fanning up and down.
+- It may run **vertically** (top to bottom) with cards fanning left and right.
+- It may be at an angle.
+
+**How to find it:** Look for the narrow strip of colorful expedition artwork (showing small illustrations in yellow, blue, white, green, red, and possibly purple). This is the center divider. Cards are played on BOTH sides of this strip, fanning outward.
+
+## Identifying Player 1 vs Player 2
+
+Once you locate the center strip:
+- **Player 1** = the side closest to the camera / bottom edge of the photo. Cards fan outward from the center toward the camera.
+- **Player 2** = the side farthest from the camera / top edge of the photo. Cards fan outward from the center away from the camera.
+
+**CRITICAL**: Each side of the board is scored completely independently. A player may have cards in some expedition colors but not others. Do NOT combine cards from both sides into one player. Analyze each side separately.
+
+It is completely normal for one player to have cards in colors that the other player does not. For example, Player 1 might have yellow, blue, and green expeditions while Player 2 has white, red, and purple.
 
 ## Expedition Colors
 
-There are 5 standard colors printed on every board: **yellow, blue, white, green, red**.
-Some editions add a 6th color: **purple**. If you see a purple column on the board, include it.
+Standard colors on every board: **yellow, blue, white, green, red**.
+Some editions add a 6th color: **purple**. Include it only if you see a purple column on the center strip.
 
-The columns on the board are typically arranged left-to-right in this order (though it can vary by edition): yellow, blue, white, green, red (and purple if present).
+The colors on the center strip are arranged in order (typically: yellow, blue, white, green, red, and purple if present). Each color column on the center strip has a matching color of cards on either side.
 
-## Card Types
+## Card Types — How to Tell Them Apart
 
-Each expedition color has these cards:
-1. **Wager (investment) cards** — exactly 3 per color. They show a **handshake symbol** and have **no number**. They are often played first in a column.
-2. **Numbered cards** — values **2 through 10** (one of each per color). They display a **large number**.
+This is critical. Each expedition color has two types of cards, and you MUST distinguish between them:
 
-## How to Read the Board
+### Wager (Investment) Cards
+- There are exactly **3 wager cards per color** in the game.
+- They show a **handshake illustration** — two hands clasping/shaking — as the main artwork on the card.
+- **They have NO number.** Where a numbered card would show a digit (like "5" or "8"), a wager card instead shows the handshake symbol or nothing.
+- In the **upper-left corner**, instead of a number, there is a **small handshake icon** or the corner may show the expedition symbol.
+- Wager cards are almost always played **first** in a column, meaning they sit **closest to the center strip** before any numbered cards.
+- Wager cards have the same colored border/background as their expedition color, so they blend in visually with the numbered cards. You must look carefully at each card to determine if it shows a number or a handshake.
 
-For each color column on each player's side:
-1. Look at the column of fanned-out cards extending from the center toward that player.
-2. Count cards showing a **handshake/investment symbol with no number** — these are wager cards. Report the total count (0, 1, 2, or 3).
-3. Read every **visible number** on the remaining cards. Numbers appear prominently on each card. Report them as a sorted list.
-4. If a color column has **no cards** on a player's side, report wagerCount 0 and an empty cardValues array.
+### Numbered Cards
+- Values **2 through 10** (one of each per color).
+- They display a **large printed number** prominently on the card face and in the **upper-left corner**.
+- Easy to identify: if you can read a digit on the card, it's a numbered card.
+
+### How to Distinguish Them in Practice
+Go through each card in a column one by one, starting from the card nearest the center strip:
+- **See a number (2–10)?** → Numbered card. Record the number.
+- **See a handshake symbol / two hands / no number?** → Wager card. Add 1 to wagerCount.
+- **Card is partially obscured?** Look at the visible upper-left corner. If it shows a digit, it's numbered. If it shows a handshake icon or no digit, it's a wager.
+
+**Wager cards are common.** Most games will have several wager cards in play across various expeditions. Do NOT default to wagerCount: 0 — carefully inspect each card.
+
+## Step-by-Step Analysis Process
+
+Follow this process methodically:
+
+**Step 1: Find the center strip** and determine its orientation.
+
+**Step 2: Identify which side is Player 1 and which is Player 2.**
+
+**Step 3: For EACH expedition color, analyze Player 1's side:**
+1. Look at the cards on Player 1's side of that color column.
+2. Go through each card from the center outward.
+3. Count cards with a handshake symbol (no number) → wagerCount.
+4. List all visible numbers → cardValues (sorted ascending).
+5. If no cards for this color on Player 1's side → wagerCount: 0, cardValues: [].
+
+**Step 4: For EACH expedition color, analyze Player 2's side:**
+6. Look at the cards on Player 2's side of that color column.
+7. Go through each card from the center outward (these may appear upside-down or at odd angles).
+8. Count cards with a handshake symbol (no number) → wagerCount.
+9. List all visible numbers → cardValues (sorted ascending).
+10. If no cards for this color on Player 2's side → wagerCount: 0, cardValues: [].
 
 ## Critical Rules
 
-- Cards with numbers on them are ALWAYS numbered cards, never wagers.
-- Wager cards NEVER have a number — only the handshake symbol.
+- A card with a number is ALWAYS a numbered card, never a wager.
+- A wager card NEVER has a number — it shows ONLY the handshake symbol.
+- Wager cards sit closest to the center strip, before numbered cards in a column.
 - Each numbered value (2–10) can appear at most once per color per player.
 - Each color can have at most 3 wager cards per player.
-- Look carefully at partially obscured cards — the upper-left corner number is usually still visible.
-- Cards on the far side of the board (Player 2) may appear upside-down or at an angle from the camera's perspective.
+- Look carefully at partially obscured cards — the upper-left corner is usually still visible.
+- Cards on the far side of the board may appear upside-down or at an angle — look carefully.
 - Always report card values in ascending numerical order.
-- Include ALL colors visible on the board for BOTH players, even if a column is empty.`;
+- Include ALL colors visible on the board for BOTH players, even if a column is empty for one of them.
+- NEVER mix cards from one side of the board into the other player's results.
+- Do NOT undercount wager cards. Inspect every card near the center of each column for the handshake symbol.`;
 
 const EXPEDITION_SCHEMA = {
   type: "object" as const,
@@ -156,7 +205,7 @@ export async function analyzeBoard(
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           thinkingConfig: {
-            thinkingBudget: 2048,
+            thinkingBudget: 8192,
           },
         },
       });

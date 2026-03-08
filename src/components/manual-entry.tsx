@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Calculator } from "lucide-react";
+import { Calculator, ChevronDown, ChevronUp, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardSelector } from "./card-selector";
@@ -16,6 +16,7 @@ interface ManualEntryProps {
   initialPlayer1?: ExpeditionData[];
   initialPlayer2?: ExpeditionData[];
   includePurple?: boolean;
+  boardImage?: string | null;
 }
 
 function createEmptyExpeditions(
@@ -36,6 +37,7 @@ export function ManualEntry({
   initialPlayer1,
   initialPlayer2,
   includePurple = false,
+  boardImage,
 }: ManualEntryProps) {
   const [player1, setPlayer1] = useState<ExpeditionData[]>(
     initialPlayer1 ?? createEmptyExpeditions(includePurple)
@@ -43,6 +45,7 @@ export function ManualEntry({
   const [player2, setPlayer2] = useState<ExpeditionData[]>(
     initialPlayer2 ?? createEmptyExpeditions(includePurple)
   );
+  const [imageExpanded, setImageExpanded] = useState(true);
 
   const updateExpedition = useCallback(
     (
@@ -111,6 +114,34 @@ export function ManualEntry({
 
   return (
     <div className="flex flex-col gap-4 w-full">
+      {boardImage && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setImageExpanded((prev) => !prev)}
+            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+          >
+            <ImageIcon className="w-4 h-4" />
+            <span className="flex-1 text-left">Board Photo Reference</span>
+            {imageExpanded ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+          {imageExpanded && (
+            <div className="px-2 pb-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={boardImage}
+                alt="Board photo reference"
+                className="w-full h-auto rounded-lg"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       <Tabs defaultValue="player1" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="player1" className="text-sm font-semibold">
