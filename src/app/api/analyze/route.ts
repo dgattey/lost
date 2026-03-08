@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError } from "@google/genai";
 import { analyzeBoard } from "@/lib/gemini";
 
-export const maxDuration = 60; // Allow up to 60s for AI analysis
+export const maxDuration = 60; // Allow up to 60s for AI analysis + retry backoff
 
 /**
  * Try to pull a human-readable quota identifier out of the Gemini error body
@@ -18,7 +18,7 @@ function extractQuotaDetail(errorMessage: string): string {
       if (quotaId) {
         if (quotaId.includes("PerDay")) return " Daily request quota exhausted.";
         if (quotaId.includes("PerMinute"))
-          return " Per-minute request quota exceeded (free tier: 15 RPM).";
+          return " Per-minute request quota exceeded.";
         return ` Quota: ${quotaId}.`;
       }
     }
@@ -26,6 +26,19 @@ function extractQuotaDetail(errorMessage: string): string {
     // message wasn't JSON — that's fine
   }
   return "";
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (error instanceof ApiError && error.status === 429) return true;
+  if (error instanceof Error) {
+    const msg = error.message;
+    return (
+      msg.includes("Too Many Requests") ||
+      msg.includes("RESOURCE_EXHAUSTED") ||
+      msg.includes("Retryable HTTP Error")
+    );
+  }
+  return false;
 }
 
 export async function POST(request: NextRequest) {
@@ -70,10 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isRateLimit =
-      (error instanceof ApiError && error.status === 429) ||
-      message.includes("Retryable HTTP Error");
-    if (isRateLimit) {
+    if (isRateLimitError(error)) {
       const detail = extractQuotaDetail(message);
       return NextResponse.json(
         {
