@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, RotateCcw, Trophy } from "lucide-react";
+import { ArrowLeft, Check, Crown, RotateCcw, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -10,8 +10,11 @@ import type { GameResult } from "@/lib/types";
 
 interface ScoreResultsProps {
   result: GameResult;
-  onReset: () => void;
+  onPrimary: () => void;
+  primaryLabel: string;
+  primaryIcon?: "check" | "reset" | "back";
   onEditCards: () => void;
+  extraActions?: React.ReactNode;
 }
 
 function PlayerCard({
@@ -67,13 +70,23 @@ function PlayerCard({
   );
 }
 
+const iconMap = {
+  check: Check,
+  reset: RotateCcw,
+  back: ArrowLeft,
+};
+
 export function ScoreResults({
   result,
-  onReset,
+  onPrimary,
+  primaryLabel,
+  primaryIcon = "check",
   onEditCards,
+  extraActions,
 }: ScoreResultsProps) {
   const { player1, player2, winner } = result;
   const isTie = winner === null;
+  const PrimaryIcon = iconMap[primaryIcon];
 
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -120,23 +133,26 @@ export function ScoreResults({
       />
 
       {/* Action buttons */}
-      <div className="flex gap-3 mt-2">
-        <Button
-          size="lg"
-          variant="outline"
-          className="flex-1 h-14 text-base gap-2"
-          onClick={onEditCards}
-        >
-          Edit Cards
-        </Button>
-        <Button
-          size="lg"
-          className="flex-1 h-14 text-base gap-2"
-          onClick={onReset}
-        >
-          <RotateCcw className="w-5 h-5" />
-          New Game
-        </Button>
+      <div className="flex flex-col gap-3 mt-2">
+        {extraActions}
+        <div className="flex gap-3">
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1 h-14 text-base gap-2"
+            onClick={onEditCards}
+          >
+            Edit Cards
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1 h-14 text-base gap-2"
+            onClick={onPrimary}
+          >
+            <PrimaryIcon className="w-5 h-5" />
+            {primaryLabel}
+          </Button>
+        </div>
       </div>
     </div>
   );
