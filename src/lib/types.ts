@@ -67,3 +67,14 @@ export interface AnalyzedGameData {
     }[];
   };
 }
+
+export interface RoundData {
+  roundNumber: number;
+  result: GameResult;
+  player1Expeditions: ExpeditionData[];
+  player2Expeditions: ExpeditionData[];
+  boardImage: string | null;
+  inputMethod: "photo" | "manual";
+  timestamp: number;
+  swapped: boolean;
+}
