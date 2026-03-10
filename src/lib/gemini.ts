@@ -1,4 +1,3 @@
-import { Jimp } from "jimp";
 import { GoogleGenAI, ApiError } from "@google/genai";
 import {
   analyzedGameSchema,
@@ -46,8 +45,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  label: string
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+      const jitter = backoff * (0.75 + Math.random() * 0.5);
+      console.log(
+        `[${label}] Rate-limited – retrying in ${Math.round(jitter / 1000)}s ` +
+          `(attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES + 1})`
+      );
+      await sleep(jitter);
+    }
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimitError(error)) throw error;
+    }
+  }
+  throw lastError;
+}
+
 // ---------------------------------------------------------------------------
-// Pass 1: Board layout detection
+// Layout detection (Pass 1)
 // ---------------------------------------------------------------------------
 
 const LAYOUT_PROMPT = `You are analyzing a top-down photo of a Lost Cities card game board.
@@ -91,8 +115,37 @@ export interface BoardLayout {
   splitPercent: number;
 }
 
+export async function detectLayout(
+  imageBase64: string
+): Promise<BoardLayout> {
+  const client = getClient();
+  return callWithRetry(async () => {
+    const res = await client.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: LAYOUT_PROMPT },
+            { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+          ],
+        },
+      ],
+      config: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: LAYOUT_SCHEMA,
+        thinkingConfig: { thinkingBudget: 4096 },
+      },
+    });
+    const text = res.text;
+    if (!text) throw new Error("No response from Gemini (layout)");
+    return JSON.parse(text) as BoardLayout;
+  }, "layout");
+}
+
 // ---------------------------------------------------------------------------
-// Pass 2: Per-player card reading on a cropped half
+// Card reading (Pass 2) — called once per cropped half
 // ---------------------------------------------------------------------------
 
 function makePlayerPrompt(boardColors: string[]): string {
@@ -146,99 +199,48 @@ const PLAYER_RESPONSE_SCHEMA = {
   required: ["expeditions"],
 };
 
-// ---------------------------------------------------------------------------
-// Retry-with-backoff helper
-// ---------------------------------------------------------------------------
+export async function readCardsFromHalf(
+  halfImageBase64: string,
+  boardColors: string[]
+): Promise<RawPlayerExpedition[]> {
+  const client = getClient();
+  const prompt = makePlayerPrompt(boardColors);
 
-async function callWithRetry<T>(
-  fn: () => Promise<T>,
-  label: string
-): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-    if (attempt > 0) {
-      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-      const jitter = backoff * (0.75 + Math.random() * 0.5);
+  return callWithRetry(async () => {
+    const res = await client.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: "image/jpeg", data: halfImageBase64 } },
+          ],
+        },
+      ],
+      config: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: PLAYER_RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 16384 },
+      },
+    });
+    const text = res.text;
+    if (!text) throw new Error("No response from Gemini (cards)");
+    const parsed = JSON.parse(text) as {
+      expeditions: RawPlayerExpedition[];
+    };
+
+    const problems = findConsistencyProblems(parsed.expeditions);
+    if (problems.length > 0) {
       console.log(
-        `[${label}] Rate-limited – retrying in ${Math.round(jitter / 1000)}s ` +
-          `(attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES + 1})`
+        `[gemini] Card reading consistency issues:\n` +
+          problems.map((p) => `  - ${p}`).join("\n")
       );
-      await sleep(jitter);
     }
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (!isRateLimitError(error)) throw error;
-    }
-  }
-  throw lastError;
-}
 
-// ---------------------------------------------------------------------------
-// Image cropping
-// ---------------------------------------------------------------------------
-
-/**
- * Crop the image into two halves (Side A and Side B) at the center strip.
- *
- * Side A = top or left half. Side B = bottom or right half. The caller
- * decides which side maps to which player — the crop itself is neutral.
- *
- * Uses Jimp (pure JS, no native dependencies) for Vercel compatibility.
- */
-export async function cropImageHalves(
-  imageBase64: string,
-  layout: BoardLayout
-): Promise<{ sideA: string; sideB: string }> {
-  const imgBuffer = Buffer.from(imageBase64, "base64");
-  const img = await Jimp.read(imgBuffer);
-  const width = img.width;
-  const height = img.height;
-
-  const splitPct = Math.max(15, Math.min(85, layout.splitPercent));
-
-  // Adaptive overlap: more near center, less at edges
-  const distFromCenter = Math.abs(splitPct - 50);
-  const overlapPct = Math.max(3, 8 - distFromCenter * 0.1);
-
-  let cropA: { x: number; y: number; w: number; h: number };
-  let cropB: { x: number; y: number; w: number; h: number };
-
-  if (layout.splitAxis === "y") {
-    const splitY = Math.round((height * splitPct) / 100);
-    const overlapPx = Math.round((height * overlapPct) / 100);
-
-    const aH = Math.min(height, splitY + overlapPx);
-    const bTop = Math.max(0, splitY - overlapPx);
-
-    cropA = { x: 0, y: 0, w: width, h: aH };
-    cropB = { x: 0, y: bTop, w: width, h: height - bTop };
-  } else {
-    const splitX = Math.round((width * splitPct) / 100);
-    const overlapPx = Math.round((width * overlapPct) / 100);
-
-    const aW = Math.min(width, splitX + overlapPx);
-    const bLeft = Math.max(0, splitX - overlapPx);
-
-    cropA = { x: 0, y: 0, w: aW, h: height };
-    cropB = { x: bLeft, y: 0, w: width - bLeft, h: height };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Jimp's crop types are overly complex
-  const sideAImg = img.clone().crop(cropA as any);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sideBImg = img.clone().crop(cropB as any);
-
-  const [sideABuffer, sideBBuffer] = await Promise.all([
-    sideAImg.getBuffer("image/jpeg", { quality: 92 }),
-    sideBImg.getBuffer("image/jpeg", { quality: 92 }),
-  ]);
-
-  return {
-    sideA: Buffer.from(sideABuffer).toString("base64"),
-    sideB: Buffer.from(sideBBuffer).toString("base64"),
-  };
+    return parsed.expeditions;
+  }, "cards");
 }
 
 // ---------------------------------------------------------------------------
@@ -275,136 +277,7 @@ export function findConsistencyProblems(
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Validation (re-export for convenience)
 // ---------------------------------------------------------------------------
 
-/**
- * Analyze a Lost Cities board photo using a two-pass approach with
- * image cropping:
- *
- * **Pass 1** — Detect center strip position and which axis to split on.
- * No player assignment — the AI just finds the strip.
- *
- * **Crop** — Split the EXIF-normalized image into Side A (top/left) and
- * Side B (bottom/right). Side A is initially mapped to Player 1 and
- * Side B to Player 2. The user can swap this in the review screen.
- *
- * **Pass 2** — Two parallel Gemini calls, one per cropped half.
- *
- * All calls use temperature=0 for determinism. Given the same image
- * and board position, the split is purely geometric — the same side
- * always produces the same crop, ensuring consistent player assignment
- * across rounds as long as the board doesn't move.
- */
-export async function analyzeBoard(
-  imageBase64: string
-): Promise<ValidatedGameData> {
-  const client = getClient();
-  const imageData = {
-    inlineData: { mimeType: "image/jpeg" as const, data: imageBase64 },
-  };
-
-  // --- Pass 1: Board layout ---
-  console.log("[gemini] Pass 1: Identifying board layout…");
-  const layout = await callWithRetry(async () => {
-    const res = await client.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        { role: "user", parts: [{ text: LAYOUT_PROMPT }, imageData] },
-      ],
-      config: {
-        temperature: 0,
-        responseMimeType: "application/json",
-        responseSchema: LAYOUT_SCHEMA,
-        thinkingConfig: { thinkingBudget: 4096 },
-      },
-    });
-    const text = res.text;
-    if (!text) throw new Error("No response from Gemini (layout)");
-    return JSON.parse(text) as BoardLayout;
-  }, "layout");
-
-  console.log(
-    `[gemini] Layout: split=${layout.splitAxis}@${layout.splitPercent}%, ` +
-      `colors=${layout.boardColors.join(",")}`
-  );
-
-  // --- Crop image into two halves ---
-  console.log("[gemini] Cropping image…");
-  const { sideA, sideB } = await cropImageHalves(imageBase64, layout);
-
-  // --- Pass 2: Per-side card reading (parallel) ---
-  console.log("[gemini] Pass 2: Reading cards per side (parallel)…");
-  const prompt = makePlayerPrompt(layout.boardColors);
-
-  async function readSide(
-    label: string,
-    halfBase64: string
-  ): Promise<RawPlayerExpedition[]> {
-    return callWithRetry(async () => {
-      const res = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: "image/jpeg", data: halfBase64 } },
-            ],
-          },
-        ],
-        config: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: PLAYER_RESPONSE_SCHEMA,
-          thinkingConfig: { thinkingBudget: 16384 },
-        },
-      });
-      const text = res.text;
-      if (!text) throw new Error(`No response from Gemini (${label})`);
-      const parsed = JSON.parse(text) as {
-        expeditions: RawPlayerExpedition[];
-      };
-
-      const problems = findConsistencyProblems(parsed.expeditions);
-      if (problems.length > 0) {
-        console.log(
-          `[gemini] ${label} consistency issues:\n` +
-            problems.map((p) => `  - ${p}`).join("\n")
-        );
-      }
-
-      return parsed.expeditions;
-    }, label);
-  }
-
-  const [sideAExpeditions, sideBExpeditions] = await Promise.all([
-    readSide("Side A", sideA),
-    readSide("Side B", sideB),
-  ]);
-
-  // Log results
-  for (const [label, exps] of [
-    ["Side A → P1", sideAExpeditions],
-    ["Side B → P2", sideBExpeditions],
-  ] as const) {
-    const active = exps.filter(
-      (e) => e.wagerCount > 0 || e.cardValues.length > 0
-    );
-    if (active.length > 0) {
-      const summary = active
-        .map((e) => `${e.color}(w=${e.wagerCount},c=[${e.cardValues}])`)
-        .join(", ");
-      console.log(`[gemini] ${label}: ${summary}`);
-    }
-  }
-
-  // Side A → Player 1, Side B → Player 2
-  // (user can swap in the review screen)
-  const raw = {
-    player1: { expeditions: sideAExpeditions },
-    player2: { expeditions: sideBExpeditions },
-  };
-
-  return analyzedGameSchema.parse(raw);
-}
+export { analyzedGameSchema, type ValidatedGameData };
