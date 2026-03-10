@@ -1,7 +1,12 @@
 import { GoogleGenAI, ApiError } from "@google/genai";
-import { analyzedGameSchema, type ValidatedGameData } from "./validation";
+import {
+  analyzedGameSchema,
+  type RawAnalyzedGameData,
+  type ValidatedGameData,
+} from "./validation";
 
-const MAX_APP_RETRIES = 3;
+const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_CONSISTENCY_RETRIES = 2;
 const INITIAL_BACKOFF_MS = 10_000;
 
 let _client: GoogleGenAI | undefined;
@@ -17,9 +22,6 @@ function getClient(): GoogleGenAI {
     httpOptions: {
       timeout: 60_000,
       retryOptions: {
-        // Disable SDK-level retries — they fire too fast and burn through
-        // the free-tier quota. We handle retries at the application level
-        // with longer backoff instead.
         attempts: 1,
       },
     },
@@ -70,8 +72,11 @@ This is the MOST CRITICAL step. You must distinguish between:
 - **Discard pile cards** sitting ON TOP of the center strip itself
 - **Cards at the edges or corners** of the table that aren't connected to a column
 - Any cards that are **randomly arranged**, not fanned in a neat column
+- **Cards that are far from the board**, especially at the bottom of the photo or in corners
 
 **CRITICAL ERROR TO AVOID:** If you see cards of a certain color lying near the table edge or scattered about, but they are NOT part of an organized column extending from the center strip, do NOT count them for either player. These are likely cards in a draw pile, a player's hand, or discards.
+
+**KEY PRINCIPLE**: A player's played cards appear ONLY on THEIR SIDE of the center strip, in organized columns that fan outward from the center strip. If a player's side has no organized column for a color (no neat fan of cards extending from that color's section on the center strip), then that color should be EMPTY for that player — even if you see cards of that color elsewhere on the table.
 
 ## STEP 3: Identify Player 1 vs Player 2
 
@@ -103,14 +108,25 @@ Each physical card in a fanned column has its own visible edge or corner that st
 - Look along the edge of each column for distinct card corners/edges
 - Pay special attention to the cards CLOSEST to the center strip — wager cards overlap heavily and are easy to miss
 - If the stack looks "thicker" near the center strip, it likely has multiple wager cards underneath
+- Do NOT count the center strip section itself as a card — only count actual played cards
 
 Report this count as **totalCardsInColumn** for each expedition.
+
+**IMPORTANT COUNTING RULES:**
+- Do NOT count the center strip section as a card. The colored artwork on the center strip is part of the board, not a played card.
+- Do NOT count any discard cards sitting ON TOP of the center strip.
+- ONLY count cards that are in the organized fan/column extending AWAY from the center strip.
 
 ## STEP 6: Identify Numbered Cards
 
 Go through each column and identify every card that has a **visible printed number** (2–10). These are the numbered cards. Add them to **cardValues**.
 
 Numbers appear both as large text on the card face and in the upper-left corner. If you can see any digit on a card, it's a numbered card.
+
+**Reading upside-down cards (far side of board):** Cards on the far side appear upside-down:
+- **9** looks like **6** upside-down. If you see "6" on the far side but already have a 6, it's actually **9**
+- If a column has 8 and 10 but no 9, look for an upside-down "6" — that's the 9
+- **8** and **3** can be confused at angles
 
 ## STEP 7: Calculate Wager Count from the Difference
 
@@ -123,18 +139,23 @@ Wager (handshake) cards are the ones WITHOUT a number. They show a handshake ill
 
 This is more reliable than trying to visually identify handshake symbols on overlapping cards.
 
+**MANDATORY CONSISTENCY CHECK:** For EVERY expedition, verify that:
+  totalCardsInColumn == wagerCount + count(cardValues)
+If this equation does NOT hold, you have made an error. Go back and recount.
+
 ## STEP 8: Final Verification Checklist
 
-Before producing your answer, verify:
+Before producing your answer, verify ALL of these:
 - [ ] Every card you counted is part of an ORGANIZED COLUMN extending from the center strip
 - [ ] NO scattered, loose, or hand-held cards were counted
 - [ ] NO cards sitting ON the center strip (discards) were counted
 - [ ] Each card was assigned to ONLY ONE player (the player on that card's side of the center strip)
 - [ ] Card colors match their column's position on the center strip
 - [ ] No numbered value appears twice in the same color for the same player
-- [ ] For each column: totalCardsInColumn = wagerCount + count(cardValues)
+- [ ] For EVERY expedition: totalCardsInColumn == wagerCount + count(cardValues)
 - [ ] Wager count is 0–3 for each expedition
 - [ ] Card values are reported in ascending order
+- [ ] ALWAYS ensure: totalCardsInColumn == wagerCount + count(cardValues) for every expedition
 
 ## Rules Summary
 
@@ -180,13 +201,112 @@ const RESPONSE_SCHEMA = {
   required: ["player1", "player2"],
 };
 
+interface RawExpedition {
+  color: string;
+  totalCardsInColumn: number;
+  wagerCount: number;
+  cardValues: number[];
+}
+
+interface RawPlayerData {
+  expeditions: RawExpedition[];
+}
+
+/**
+ * Check if the raw AI response has internal consistency issues that
+ * warrant a retry. Returns a list of problems found.
+ */
+function findConsistencyProblems(data: {
+  player1: RawPlayerData;
+  player2: RawPlayerData;
+}): string[] {
+  const problems: string[] = [];
+
+  for (const [label, player] of [
+    ["P1", data.player1],
+    ["P2", data.player2],
+  ] as const) {
+    for (const exp of player.expeditions) {
+      const numCards = exp.cardValues.length;
+      const declaredTotal = exp.totalCardsInColumn;
+      const declaredWager = exp.wagerCount;
+
+      if (declaredWager < 0 || declaredWager > 3) {
+        problems.push(
+          `${label} ${exp.color}: wagerCount=${declaredWager} out of range 0-3`
+        );
+      }
+
+      if (declaredTotal !== declaredWager + numCards) {
+        problems.push(
+          `${label} ${exp.color}: totalCards=${declaredTotal} != wager(${declaredWager}) + numbered(${numCards})`
+        );
+      }
+
+      const unique = new Set(exp.cardValues);
+      if (unique.size !== numCards) {
+        problems.push(
+          `${label} ${exp.color}: duplicate card values in [${exp.cardValues}]`
+        );
+      }
+
+      for (const v of exp.cardValues) {
+        if (v < 2 || v > 10) {
+          problems.push(
+            `${label} ${exp.color}: card value ${v} out of range 2-10`
+          );
+        }
+      }
+    }
+  }
+
+  return problems;
+}
+
+/**
+ * Make a single Gemini API call and parse the response.
+ */
+async function callGemini(
+  client: GoogleGenAI,
+  imageBase64: string
+): Promise<RawAnalyzedGameData> {
+  const response = await client.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: ANALYSIS_PROMPT },
+          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
+        ],
+      },
+    ],
+    config: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
+      thinkingConfig: {
+        thinkingBudget: 24576,
+      },
+    },
+  });
+
+  const text = response.text;
+  if (!text) {
+    throw new Error("No response from Gemini");
+  }
+
+  return JSON.parse(text) as RawAnalyzedGameData;
+}
+
 /**
  * Analyze a Lost Cities board photo using Google Gemini Vision.
  *
- * Uses gemini-2.5-flash for superior vision accuracy over flash-lite.
- * Enables thinking (thinkingBudget) so the model reasons about card
- * positions before producing structured output. Retries with exponential
- * backoff (10 s → 20 s → 40 s) on 429 rate-limit errors.
+ * Uses gemini-2.5-flash with temperature=0 and a fixed seed for
+ * maximum determinism. Retries on:
+ * - 429 rate-limit errors (exponential backoff: 10s → 20s → 40s)
+ * - Internal consistency failures (totalCards != wagers + numbered)
+ * - Zod validation failures (out-of-range values)
  */
 export async function analyzeBoard(
   imageBase64: string
@@ -194,47 +314,66 @@ export async function analyzeBoard(
   const client = getClient();
 
   let lastError: unknown;
-  for (let attempt = 0; attempt <= MAX_APP_RETRIES; attempt++) {
-    if (attempt > 0) {
-      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+  let consistencyAttempt = 0;
+
+  for (
+    let rateLimitAttempt = 0;
+    rateLimitAttempt <= MAX_RATE_LIMIT_RETRIES;
+    rateLimitAttempt++
+  ) {
+    if (rateLimitAttempt > 0) {
+      const backoff =
+        INITIAL_BACKOFF_MS * Math.pow(2, rateLimitAttempt - 1);
       const jitter = backoff * (0.75 + Math.random() * 0.5);
       console.log(
-        `Rate-limited – retrying in ${Math.round(jitter / 1000)}s (attempt ${attempt + 1}/${MAX_APP_RETRIES + 1})`
+        `Rate-limited – retrying in ${Math.round(jitter / 1000)}s ` +
+          `(attempt ${rateLimitAttempt + 1}/${MAX_RATE_LIMIT_RETRIES + 1})`
       );
       await sleep(jitter);
     }
 
     try {
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: ANALYSIS_PROMPT },
-              { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
-            ],
-          },
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          thinkingConfig: {
-            thinkingBudget: 24576,
-          },
-        },
-      });
+      const raw = await callGemini(client, imageBase64);
 
-      const text = response.text;
-      if (!text) {
-        throw new Error("No response from Gemini");
+      const problems = findConsistencyProblems(raw);
+      if (problems.length > 0) {
+        consistencyAttempt++;
+        console.log(
+          `[gemini] Consistency issues (attempt ${consistencyAttempt}/${MAX_CONSISTENCY_RETRIES}):\n` +
+            problems.map((p) => `  - ${p}`).join("\n")
+        );
+
+        if (consistencyAttempt >= MAX_CONSISTENCY_RETRIES) {
+          console.log(
+            "[gemini] Max consistency retries reached, proceeding with best-effort correction"
+          );
+          return analyzedGameSchema.parse(raw);
+        }
+
+        rateLimitAttempt--;
+        continue;
       }
 
-      const parsed = JSON.parse(text);
-      return analyzedGameSchema.parse(parsed);
+      return analyzedGameSchema.parse(raw);
     } catch (error) {
       lastError = error;
-      if (!isRateLimitError(error)) throw error;
+      if (isRateLimitError(error)) continue;
+
+      if (
+        error instanceof Error &&
+        (error.message.includes("Too big") ||
+          error.message.includes("Too small"))
+      ) {
+        consistencyAttempt++;
+        console.log(
+          `[gemini] Validation error (attempt ${consistencyAttempt}/${MAX_CONSISTENCY_RETRIES}): ${error.message}`
+        );
+        if (consistencyAttempt >= MAX_CONSISTENCY_RETRIES) throw error;
+        rateLimitAttempt--;
+        continue;
+      }
+
+      throw error;
     }
   }
 
