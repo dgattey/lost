@@ -54,6 +54,7 @@ The Lost Cities board has a **center strip** — a narrow column or row of color
 - It may run **horizontally** (left to right) with cards fanning up and down.
 - It may run **vertically** (top to bottom) with cards fanning left and right.
 - It may be at an angle.
+- The photo may be taken from **directly above** (bird's eye / top-down view).
 
 **How to find it:** Look for the narrow strip of colorful expedition artwork (showing small illustrations in yellow, blue, white, green, red, and possibly purple). This is the center divider. Cards are played on BOTH sides of this strip, fanning outward.
 
@@ -78,26 +79,29 @@ The colors on the center strip are arranged in order (typically: yellow, blue, w
 
 This is critical. Each expedition color has two types of cards, and you MUST distinguish between them:
 
-### Wager (Investment) Cards
-- There are exactly **3 wager cards per color** in the game.
-- They show a **handshake illustration** — two hands clasping/shaking — as the main artwork on the card.
-- **They have NO number.** Where a numbered card would show a digit (like "5" or "8"), a wager card instead shows the handshake symbol or nothing.
-- In the **upper-left corner**, instead of a number, there is a **small handshake icon** or the corner may show the expedition symbol.
+### Wager (Investment/Handshake) Cards
+- There are exactly **3 wager cards per color** in the game (so up to 3 can appear in a single column).
+- They show a **handshake illustration** — two hands clasping/shaking — as the main artwork on the card face.
+- **They have NO number.** Where a numbered card would show a digit (like "5" or "8"), a wager card instead shows the handshake symbol.
+- In the **upper-left corner**, instead of a number, there is a **small handshake icon** or the corner may show the expedition symbol without any digit.
 - Wager cards are almost always played **first** in a column, meaning they sit **closest to the center strip** before any numbered cards.
-- Wager cards have the same colored border/background as their expedition color, so they blend in visually with the numbered cards. You must look carefully at each card to determine if it shows a number or a handshake.
+- Wager cards have the same colored border/background as their expedition color, so they blend in visually with the numbered cards.
 
 ### Numbered Cards
 - Values **2 through 10** (one of each per color).
 - They display a **large printed number** prominently on the card face and in the **upper-left corner**.
 - Easy to identify: if you can read a digit on the card, it's a numbered card.
 
-### How to Distinguish Them in Practice
-Go through each card in a column one by one, starting from the card nearest the center strip:
-- **See a number (2–10)?** → Numbered card. Record the number.
-- **See a handshake symbol / two hands / no number?** → Wager card. Add 1 to wagerCount.
-- **Card is partially obscured?** Look at the visible upper-left corner. If it shows a digit, it's numbered. If it shows a handshake icon or no digit, it's a wager.
+## Counting Wager Cards — This Is the Hardest Part
 
-**Wager cards are common.** Most games will have several wager cards in play across various expeditions. Do NOT default to wagerCount: 0 — carefully inspect each card.
+Wager cards look nearly identical to each other (same handshake art, same color). When 2 or 3 are stacked, they overlap and are easy to undercount. Use these techniques:
+
+1. **Count card edges**: Each physical card in a fan/stack has its own visible edge or corner. Count the number of separate card edges you can see between the center strip and the first numbered card. Each edge = one card.
+2. **Look for offset corners**: When multiple wager cards are stacked, each one's corner is slightly offset from the previous. Count these offset corners.
+3. **Check card thickness**: A thicker-looking "card" near the center strip may actually be 2 or 3 overlapping wager cards. Look for any separation lines between them.
+4. **Cross-check with total count**: After identifying all cards in a column, verify: total card edges visible = wagerCount + number of cardValues. If these don't add up, recount.
+
+**Common mistake**: Seeing multiple overlapping wager cards but counting them as just 1. Always look for evidence of additional cards underneath.
 
 ## Step-by-Step Analysis Process
 
@@ -108,18 +112,15 @@ Follow this process methodically:
 **Step 2: Identify which side is Player 1 and which is Player 2.**
 
 **Step 3: For EACH expedition color, analyze Player 1's side:**
-1. Look at the cards on Player 1's side of that color column.
-2. Go through each card from the center outward.
-3. Count cards with a handshake symbol (no number) → wagerCount.
-4. List all visible numbers → cardValues (sorted ascending).
+1. Count the **total number of separate card edges** visible on Player 1's side of that color.
+2. Starting from the card nearest the center strip, examine each card:
+   - No number / handshake symbol → wager card (increment wagerCount)
+   - Visible number (2–10) → numbered card (add to cardValues)
+3. Verify: wagerCount + len(cardValues) should equal the total card edges you counted.
+4. If the numbers don't add up, look again for missed wager cards or missed numbered cards.
 5. If no cards for this color on Player 1's side → wagerCount: 0, cardValues: [].
 
-**Step 4: For EACH expedition color, analyze Player 2's side:**
-6. Look at the cards on Player 2's side of that color column.
-7. Go through each card from the center outward (these may appear upside-down or at odd angles).
-8. Count cards with a handshake symbol (no number) → wagerCount.
-9. List all visible numbers → cardValues (sorted ascending).
-10. If no cards for this color on Player 2's side → wagerCount: 0, cardValues: [].
+**Step 4: For EACH expedition color, analyze Player 2's side** using the same process. Cards on the far side may appear upside-down or at an angle — look carefully at each one.
 
 ## Critical Rules
 
@@ -128,12 +129,12 @@ Follow this process methodically:
 - Wager cards sit closest to the center strip, before numbered cards in a column.
 - Each numbered value (2–10) can appear at most once per color per player.
 - Each color can have at most 3 wager cards per player.
+- Having 2 or 3 wager cards in a single expedition is VERY COMMON. Do NOT default to 0 or 1 — carefully count card edges near the center.
 - Look carefully at partially obscured cards — the upper-left corner is usually still visible.
 - Cards on the far side of the board may appear upside-down or at an angle — look carefully.
 - Always report card values in ascending numerical order.
 - Include ALL colors visible on the board for BOTH players, even if a column is empty for one of them.
-- NEVER mix cards from one side of the board into the other player's results.
-- Do NOT undercount wager cards. Inspect every card near the center of each column for the handshake symbol.`;
+- NEVER mix cards from one side of the board into the other player's results.`;
 
 const EXPEDITION_SCHEMA = {
   type: "object" as const,
@@ -205,7 +206,7 @@ export async function analyzeBoard(
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           thinkingConfig: {
-            thinkingBudget: 8192,
+            thinkingBudget: 16384,
           },
         },
       });

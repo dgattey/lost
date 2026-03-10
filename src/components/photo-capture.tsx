@@ -73,8 +73,8 @@ export function PhotoCapture({ onAnalyze, isAnalyzing }: PhotoCaptureProps) {
               <Camera className="w-8 h-8 text-muted-foreground" />
             </div>
             <p className="text-sm text-muted-foreground text-center">
-              Take a photo of your Lost Cities board or choose one from your
-              library
+              Take a top-down photo of the full Lost Cities board or choose
+              one from your library
             </p>
           </div>
 

@@ -205,7 +205,7 @@ export default function ScorePage() {
             </div>
 
             <div className="text-center text-xs text-muted-foreground max-w-xs">
-              <p>Photo scanning requires an AI API key.</p>
+              <p>Photo scanning requires an AI API key and a top-down photo of the full board.</p>
             </div>
           </div>
         )}
