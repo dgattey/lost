@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ApiError } from "@google/genai";
 import { analyzeBoard } from "@/lib/gemini";
 
-export const maxDuration = 60; // Allow up to 60s for AI analysis + retry backoff
+export const maxDuration = 120; // Allow up to 120s for multi-pass AI analysis
 
 /**
  * Try to pull a human-readable quota identifier out of the Gemini error body

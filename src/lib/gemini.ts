@@ -1,12 +1,12 @@
+import sharp from "sharp";
 import { GoogleGenAI, ApiError } from "@google/genai";
 import {
   analyzedGameSchema,
-  type RawAnalyzedGameData,
   type ValidatedGameData,
+  type RawPlayerExpedition,
 } from "./validation";
 
 const MAX_RATE_LIMIT_RETRIES = 3;
-const MAX_CONSISTENCY_RETRIES = 2;
 const INITIAL_BACKOFF_MS = 10_000;
 
 let _client: GoogleGenAI | undefined;
@@ -29,7 +29,7 @@ function getClient(): GoogleGenAI {
   return _client;
 }
 
-function isRateLimitError(error: unknown): boolean {
+export function isRateLimitError(error: unknown): boolean {
   if (error instanceof ApiError && error.status === 429) return true;
   if (error instanceof Error) {
     const msg = error.message;
@@ -46,129 +46,75 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image VERY carefully before answering. Take your time — accuracy is far more important than speed.
+// ---------------------------------------------------------------------------
+// Pass 1: Board layout + orientation
+// ---------------------------------------------------------------------------
 
-## STEP 1: Find the Center Board Strip
+const LAYOUT_PROMPT = `You are analyzing a photo of a Lost Cities card game. Identify the board layout.
 
-The Lost Cities board has a **center strip** — a long, narrow board piece decorated with colored expedition artwork. It has 5 or 6 colored sections (yellow, blue, white, green, red, and optionally purple).
+Find the **center board strip** — a long, narrow game board piece with colored expedition sections. Cards are played in organized fans on both sides of this strip.
 
-**The center strip may be oriented in any direction.** It might run horizontally, vertically, or at an angle depending on how the photo was taken.
+Report:
+1. **boardColors**: Which expedition colors appear on the center strip (from the standard set: yellow, blue, white, green, red, purple).
+2. **centerLinePercent**: Where is the center strip located? Express as a percentage (0-100) along the axis perpendicular to the strip:
+   - If the strip is roughly horizontal: what percentage from the TOP of the image is the center strip? (e.g., 50 means middle)
+   - If the strip is roughly vertical: what percentage from the LEFT of the image is the center strip?
+3. **orientation**: Is the center strip roughly "horizontal" or "vertical"?
 
-**How to identify it:** It's the physical game board piece — a rigid strip with colorful expedition illustrations printed on it. It is NOT a card. Each colored section has a small illustration matching that expedition's theme. Cards are played on BOTH sides of this strip.
+Player 1's cards fan toward the bottom/right of the image. Player 2's cards fan toward the top/left.`;
 
-## STEP 2: Identify Played Card Columns vs Scattered Cards
+const LAYOUT_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    boardColors: {
+      type: "array" as const,
+      items: {
+        type: "string" as const,
+        enum: ["yellow", "blue", "white", "green", "red", "purple"],
+      },
+    },
+    centerLinePercent: { type: "integer" as const },
+    orientation: {
+      type: "string" as const,
+      enum: ["horizontal", "vertical"],
+    },
+  },
+  required: ["boardColors", "centerLinePercent", "orientation"],
+};
 
-This is the MOST CRITICAL step. You must distinguish between:
+interface BoardLayout {
+  boardColors: string[];
+  centerLinePercent: number;
+  orientation: "horizontal" | "vertical";
+}
 
-### ✅ PLAYED CARDS (count these)
-- Organized in **neat columns or fans** extending outward from the center strip
-- Each column is aligned with one of the colored sections on the center strip
-- Cards within a column overlap in an orderly fan so you can see the top-left corner of each card
-- The column extends from the center strip outward toward a player's side
+// ---------------------------------------------------------------------------
+// Pass 2: Per-player card reading on a cropped half
+// ---------------------------------------------------------------------------
 
-### ❌ NOT PLAYED CARDS (IGNORE these completely)
-- **Scattered/loose cards** lying on the table but NOT in an organized column from the center strip
-- **Cards in players' hands** or being held
-- **Discard pile cards** sitting ON TOP of the center strip itself
-- **Cards at the edges or corners** of the table that aren't connected to a column
-- Any cards that are **randomly arranged**, not fanned in a neat column
-- **Cards that are far from the board**, especially at the bottom of the photo or in corners
+function makePlayerPrompt(boardColors: string[]): string {
+  const colorList = boardColors.join(", ");
+  return `You are reading Lost Cities cards in this cropped image. This image shows ONLY ONE player's side of the board.
 
-**CRITICAL ERROR TO AVOID:** If you see cards of a certain color lying near the table edge or scattered about, but they are NOT part of an organized column extending from the center strip, do NOT count them for either player. These are likely cards in a draw pile, a player's hand, or discards.
+The board has these expedition colors: **${colorList}**.
 
-**KEY PRINCIPLE**: A player's played cards appear ONLY on THEIR SIDE of the center strip, in organized columns that fan outward from the center strip. If a player's side has no organized column for a color (no neat fan of cards extending from that color's section on the center strip), then that color should be EMPTY for that player — even if you see cards of that color elsewhere on the table.
+For EACH color, look for an organized fan of cards. If present, read them. If no cards for a color, report it as empty.
 
-## STEP 3: Identify Player 1 vs Player 2
+For each color with cards:
+1. **totalCardsInColumn** — Count physical cards by counting visible card edges/corners. Do NOT count the center strip artwork.
+2. **cardValues** — Every visible number (2–10), in ascending order.
+3. **wagerCount** — totalCardsInColumn minus count(cardValues). Wager cards have a handshake symbol (NO number) and are closest to the center strip edge.
 
-Once you find the center strip:
-- **Player 1** = cards fanning outward from the center strip toward the **bottom/near edge** of the photo (closer to camera)
-- **Player 2** = cards fanning outward from the center strip toward the **top/far edge** of the photo (away from camera)
-
-If the board is sideways: Player 1 = left side, Player 2 = right side. Use the center strip as the dividing line.
-
-**CRITICAL**: Analyze each side COMPLETELY INDEPENDENTLY. Do NOT mix cards from one side into the other. A player may have expeditions in some colors but not others — this is normal.
-
-## STEP 4: Identify Expedition Colors on Each Card
-
-Lost Cities cards have distinct color themes. Match each card's COLOR to the expedition:
-- **Yellow** — Desert/sand artwork, amber/gold card borders, warm yellow tones
-- **Blue** — Ocean/water artwork, blue card borders, cool blue tones
-- **White** — Snow/mountain/ice artwork, white/grey card borders, pale/silver tones
-- **Green** — Jungle/vegetation artwork, green card borders, forest green tones
-- **Red** — Volcano/fire/lava artwork, red card borders, bright red tones
-- **Purple** — Crystal/cave artwork, purple/violet card borders, deep purple tones (only in 6-color editions)
-
-**IMPORTANT:** A card's color should match the center strip section it is aligned with. If a card is in the column extending from the yellow section of the center strip, it should be a yellow card. If there's a mismatch, re-examine which column the card actually belongs to.
-
-## STEP 5: Count Total Cards in Each Column (CRITICAL)
-
-**This step is essential for accuracy.** Before identifying individual cards, first COUNT the total number of physical cards in each column by counting card edges, corners, or visible separations.
-
-Each physical card in a fanned column has its own visible edge or corner that sticks out. Count these carefully:
-- Look along the edge of each column for distinct card corners/edges
-- Pay special attention to the cards CLOSEST to the center strip — wager cards overlap heavily and are easy to miss
-- If the stack looks "thicker" near the center strip, it likely has multiple wager cards underneath
-- Do NOT count the center strip section itself as a card — only count actual played cards
-
-Report this count as **totalCardsInColumn** for each expedition.
-
-**IMPORTANT COUNTING RULES:**
-- Do NOT count the center strip section as a card. The colored artwork on the center strip is part of the board, not a played card.
-- Do NOT count any discard cards sitting ON TOP of the center strip.
-- ONLY count cards that are in the organized fan/column extending AWAY from the center strip.
-
-## STEP 6: Identify Numbered Cards
-
-Go through each column and identify every card that has a **visible printed number** (2–10). These are the numbered cards. Add them to **cardValues**.
-
-Numbers appear both as large text on the card face and in the upper-left corner. If you can see any digit on a card, it's a numbered card.
-
-**Reading upside-down cards (far side of board):** Cards on the far side appear upside-down:
-- **9** looks like **6** upside-down. If you see "6" on the far side but already have a 6, it's actually **9**
-- If a column has 8 and 10 but no 9, look for an upside-down "6" — that's the 9
-- **8** and **3** can be confused at angles
-
-## STEP 7: Calculate Wager Count from the Difference
-
-**wagerCount = totalCardsInColumn − number of identified numbered cards**
-
-Wager (handshake) cards are the ones WITHOUT a number. They show a handshake illustration and sit closest to the center strip. Rather than trying to identify them visually (which is hard when they overlap), use the MATH:
-- If you counted 7 total card edges in a column but only found 6 numbered cards → **wagerCount = 1**
-- If you counted 10 total card edges but only found 7 numbered cards → **wagerCount = 3**
-- If the total matches the numbered cards exactly → **wagerCount = 0**
-
-This is more reliable than trying to visually identify handshake symbols on overlapping cards.
-
-**MANDATORY CONSISTENCY CHECK:** For EVERY expedition, verify that:
-  totalCardsInColumn == wagerCount + count(cardValues)
-If this equation does NOT hold, you have made an error. Go back and recount.
-
-## STEP 8: Final Verification Checklist
-
-Before producing your answer, verify ALL of these:
-- [ ] Every card you counted is part of an ORGANIZED COLUMN extending from the center strip
-- [ ] NO scattered, loose, or hand-held cards were counted
-- [ ] NO cards sitting ON the center strip (discards) were counted
-- [ ] Each card was assigned to ONLY ONE player (the player on that card's side of the center strip)
-- [ ] Card colors match their column's position on the center strip
-- [ ] No numbered value appears twice in the same color for the same player
-- [ ] For EVERY expedition: totalCardsInColumn == wagerCount + count(cardValues)
-- [ ] Wager count is 0–3 for each expedition
-- [ ] Card values are reported in ascending order
-- [ ] ALWAYS ensure: totalCardsInColumn == wagerCount + count(cardValues) for every expedition
-
-## Rules Summary
-
-- Only count cards in organized columns extending from the center strip
-- IGNORE all scattered, loose, held, or discarded cards
-- COUNT TOTAL CARD EDGES in each column first, then identify numbers, then derive wagers from the math
-- A card with a number is ALWAYS a numbered card (2–10)
-- A wager card has NO number — only the handshake symbol
-- Each value 2–10 appears at most once per color per player
-- Max 3 wager cards per color per player
+Rules:
+- Each number 2–10 appears at most ONCE per color
+- Max 3 wager cards per color
+- **9 vs 6**: If cards appear upside-down, a "6" is actually **9**. If a column has 8 and 10 but no 9, look for an upside-down 6.
 - Report cardValues in ascending order
-- Include all board colors for both players (empty columns = totalCardsInColumn:0, wagerCount:0, cardValues:[])
-- NEVER assign cards from one side of the center strip to the other player`;
+- IGNORE scattered/loose cards not in organized fans
+- totalCardsInColumn MUST equal wagerCount + count(cardValues)
+
+For colors with no cards: totalCardsInColumn=0, wagerCount=0, cardValues=[].`;
+}
 
 const EXPEDITION_SCHEMA = {
   type: "object" as const,
@@ -187,7 +133,7 @@ const EXPEDITION_SCHEMA = {
   required: ["color", "totalCardsInColumn", "wagerCount", "cardValues"],
 };
 
-const PLAYER_SCHEMA = {
+const PLAYER_RESPONSE_SCHEMA = {
   type: "object" as const,
   properties: {
     expeditions: { type: "array" as const, items: EXPEDITION_SCHEMA },
@@ -195,187 +141,255 @@ const PLAYER_SCHEMA = {
   required: ["expeditions"],
 };
 
-const RESPONSE_SCHEMA = {
-  type: "object" as const,
-  properties: { player1: PLAYER_SCHEMA, player2: PLAYER_SCHEMA },
-  required: ["player1", "player2"],
-};
+// ---------------------------------------------------------------------------
+// Retry-with-backoff helper
+// ---------------------------------------------------------------------------
 
-interface RawExpedition {
-  color: string;
-  totalCardsInColumn: number;
-  wagerCount: number;
-  cardValues: number[];
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  label: string
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+      const jitter = backoff * (0.75 + Math.random() * 0.5);
+      console.log(
+        `[${label}] Rate-limited – retrying in ${Math.round(jitter / 1000)}s ` +
+          `(attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES + 1})`
+      );
+      await sleep(jitter);
+    }
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimitError(error)) throw error;
+    }
+  }
+  throw lastError;
 }
 
-interface RawPlayerData {
-  expeditions: RawExpedition[];
+// ---------------------------------------------------------------------------
+// Image cropping
+// ---------------------------------------------------------------------------
+
+async function cropImageHalves(
+  imageBase64: string,
+  layout: BoardLayout
+): Promise<{ player1Half: string; player2Half: string }> {
+  const imgBuffer = Buffer.from(imageBase64, "base64");
+  const metadata = await sharp(imgBuffer).metadata();
+  const width = metadata.width!;
+  const height = metadata.height!;
+
+  const splitPercent = Math.max(20, Math.min(80, layout.centerLinePercent));
+  const overlap = 5; // % overlap so cards near the center strip aren't cut off
+
+  let p1Crop: { left: number; top: number; width: number; height: number };
+  let p2Crop: { left: number; top: number; width: number; height: number };
+
+  if (layout.orientation === "horizontal") {
+    const splitY = Math.round((height * splitPercent) / 100);
+    const overlapPx = Math.round((height * overlap) / 100);
+
+    // Player 1 = bottom half (near camera)
+    p1Crop = {
+      left: 0,
+      top: Math.max(0, splitY - overlapPx),
+      width,
+      height: height - Math.max(0, splitY - overlapPx),
+    };
+    // Player 2 = top half (far from camera)
+    p2Crop = {
+      left: 0,
+      top: 0,
+      width,
+      height: Math.min(height, splitY + overlapPx),
+    };
+  } else {
+    const splitX = Math.round((width * splitPercent) / 100);
+    const overlapPx = Math.round((width * overlap) / 100);
+
+    // Player 1 = right half
+    p1Crop = {
+      left: Math.max(0, splitX - overlapPx),
+      top: 0,
+      width: width - Math.max(0, splitX - overlapPx),
+      height,
+    };
+    // Player 2 = left half
+    p2Crop = {
+      left: 0,
+      top: 0,
+      width: Math.min(width, splitX + overlapPx),
+      height,
+    };
+  }
+
+  const [p1Buffer, p2Buffer] = await Promise.all([
+    sharp(imgBuffer).extract(p1Crop).jpeg({ quality: 92 }).toBuffer(),
+    sharp(imgBuffer).extract(p2Crop).jpeg({ quality: 92 }).toBuffer(),
+  ]);
+
+  return {
+    player1Half: p1Buffer.toString("base64"),
+    player2Half: p2Buffer.toString("base64"),
+  };
 }
 
-/**
- * Check if the raw AI response has internal consistency issues that
- * warrant a retry. Returns a list of problems found.
- */
-function findConsistencyProblems(data: {
-  player1: RawPlayerData;
-  player2: RawPlayerData;
-}): string[] {
+// ---------------------------------------------------------------------------
+// Consistency checking
+// ---------------------------------------------------------------------------
+
+export function findConsistencyProblems(
+  expeditions: RawPlayerExpedition[]
+): string[] {
   const problems: string[] = [];
-
-  for (const [label, player] of [
-    ["P1", data.player1],
-    ["P2", data.player2],
-  ] as const) {
-    for (const exp of player.expeditions) {
-      const numCards = exp.cardValues.length;
-      const declaredTotal = exp.totalCardsInColumn;
-      const declaredWager = exp.wagerCount;
-
-      if (declaredWager < 0 || declaredWager > 3) {
-        problems.push(
-          `${label} ${exp.color}: wagerCount=${declaredWager} out of range 0-3`
-        );
-      }
-
-      if (declaredTotal !== declaredWager + numCards) {
-        problems.push(
-          `${label} ${exp.color}: totalCards=${declaredTotal} != wager(${declaredWager}) + numbered(${numCards})`
-        );
-      }
-
-      const unique = new Set(exp.cardValues);
-      if (unique.size !== numCards) {
-        problems.push(
-          `${label} ${exp.color}: duplicate card values in [${exp.cardValues}]`
-        );
-      }
-
-      for (const v of exp.cardValues) {
-        if (v < 2 || v > 10) {
-          problems.push(
-            `${label} ${exp.color}: card value ${v} out of range 2-10`
-          );
-        }
+  for (const exp of expeditions) {
+    const numCards = exp.cardValues.length;
+    if (exp.wagerCount < 0 || exp.wagerCount > 3) {
+      problems.push(
+        `${exp.color}: wagerCount=${exp.wagerCount} out of range 0-3`
+      );
+    }
+    if (exp.totalCardsInColumn !== exp.wagerCount + numCards) {
+      problems.push(
+        `${exp.color}: totalCards=${exp.totalCardsInColumn} != wager(${exp.wagerCount}) + numbered(${numCards})`
+      );
+    }
+    const unique = new Set(exp.cardValues);
+    if (unique.size !== numCards) {
+      problems.push(`${exp.color}: duplicate card values [${exp.cardValues}]`);
+    }
+    for (const v of exp.cardValues) {
+      if (v < 2 || v > 10) {
+        problems.push(`${exp.color}: card value ${v} out of range 2-10`);
       }
     }
   }
-
   return problems;
 }
 
-/**
- * Make a single Gemini API call and parse the response.
- */
-async function callGemini(
-  client: GoogleGenAI,
-  imageBase64: string
-): Promise<RawAnalyzedGameData> {
-  const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: ANALYSIS_PROMPT },
-          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
-        ],
-      },
-    ],
-    config: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-      thinkingConfig: {
-        thinkingBudget: 24576,
-      },
-    },
-  });
-
-  const text = response.text;
-  if (!text) {
-    throw new Error("No response from Gemini");
-  }
-
-  return JSON.parse(text) as RawAnalyzedGameData;
-}
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
- * Analyze a Lost Cities board photo using Google Gemini Vision.
+ * Analyze a Lost Cities board photo using a two-pass approach with
+ * image cropping:
  *
- * Uses gemini-2.5-flash with temperature=0 and a fixed seed for
- * maximum determinism. Retries on:
- * - 429 rate-limit errors (exponential backoff: 10s → 20s → 40s)
- * - Internal consistency failures (totalCards != wagers + numbered)
- * - Zod validation failures (out-of-range values)
+ * **Pass 1** — Identify the board center strip position and orientation,
+ * plus which colors are on the board.
+ *
+ * **Crop** — Split the image into two halves at the center strip, one
+ * per player. Each half only shows that player's cards.
+ *
+ * **Pass 2** — Two parallel Gemini calls, one per cropped half. Each
+ * call reads only the cards visible in its half.
+ *
+ * All calls use temperature=0 for determinism.
  */
 export async function analyzeBoard(
   imageBase64: string
 ): Promise<ValidatedGameData> {
   const client = getClient();
+  const imageData = {
+    inlineData: { mimeType: "image/jpeg" as const, data: imageBase64 },
+  };
 
-  let lastError: unknown;
-  let consistencyAttempt = 0;
+  // --- Pass 1: Board layout + center strip position ---
+  console.log("[gemini] Pass 1: Identifying board layout…");
+  const layout = await callWithRetry(async () => {
+    const res = await client.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        { role: "user", parts: [{ text: LAYOUT_PROMPT }, imageData] },
+      ],
+      config: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: LAYOUT_SCHEMA,
+        thinkingConfig: { thinkingBudget: 4096 },
+      },
+    });
+    const text = res.text;
+    if (!text) throw new Error("No response from Gemini (layout)");
+    return JSON.parse(text) as BoardLayout;
+  }, "layout");
 
-  for (
-    let rateLimitAttempt = 0;
-    rateLimitAttempt <= MAX_RATE_LIMIT_RETRIES;
-    rateLimitAttempt++
-  ) {
-    if (rateLimitAttempt > 0) {
-      const backoff =
-        INITIAL_BACKOFF_MS * Math.pow(2, rateLimitAttempt - 1);
-      const jitter = backoff * (0.75 + Math.random() * 0.5);
-      console.log(
-        `Rate-limited – retrying in ${Math.round(jitter / 1000)}s ` +
-          `(attempt ${rateLimitAttempt + 1}/${MAX_RATE_LIMIT_RETRIES + 1})`
-      );
-      await sleep(jitter);
-    }
+  console.log(
+    `[gemini] Layout: colors=${layout.boardColors.join(",")}, ` +
+      `center=${layout.centerLinePercent}%, orientation=${layout.orientation}`
+  );
 
-    try {
-      const raw = await callGemini(client, imageBase64);
+  // --- Crop image into two halves ---
+  console.log("[gemini] Cropping image into player halves…");
+  const { player1Half, player2Half } = await cropImageHalves(
+    imageBase64,
+    layout
+  );
 
-      const problems = findConsistencyProblems(raw);
+  // --- Pass 2: Per-player card reading on cropped halves (parallel) ---
+  console.log("[gemini] Pass 2: Reading cards per player (parallel)…");
+
+  const prompt = makePlayerPrompt(layout.boardColors);
+
+  async function readPlayer(
+    label: string,
+    halfBase64: string
+  ): Promise<RawPlayerExpedition[]> {
+    return callWithRetry(async () => {
+      const res = await client.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: halfBase64,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: PLAYER_RESPONSE_SCHEMA,
+          thinkingConfig: { thinkingBudget: 16384 },
+        },
+      });
+      const text = res.text;
+      if (!text) throw new Error(`No response from Gemini (${label})`);
+      const parsed = JSON.parse(text) as {
+        expeditions: RawPlayerExpedition[];
+      };
+
+      const problems = findConsistencyProblems(parsed.expeditions);
       if (problems.length > 0) {
-        consistencyAttempt++;
         console.log(
-          `[gemini] Consistency issues (attempt ${consistencyAttempt}/${MAX_CONSISTENCY_RETRIES}):\n` +
+          `[gemini] ${label} consistency issues:\n` +
             problems.map((p) => `  - ${p}`).join("\n")
         );
-
-        if (consistencyAttempt >= MAX_CONSISTENCY_RETRIES) {
-          console.log(
-            "[gemini] Max consistency retries reached, proceeding with best-effort correction"
-          );
-          return analyzedGameSchema.parse(raw);
-        }
-
-        rateLimitAttempt--;
-        continue;
       }
 
-      return analyzedGameSchema.parse(raw);
-    } catch (error) {
-      lastError = error;
-      if (isRateLimitError(error)) continue;
-
-      if (
-        error instanceof Error &&
-        (error.message.includes("Too big") ||
-          error.message.includes("Too small"))
-      ) {
-        consistencyAttempt++;
-        console.log(
-          `[gemini] Validation error (attempt ${consistencyAttempt}/${MAX_CONSISTENCY_RETRIES}): ${error.message}`
-        );
-        if (consistencyAttempt >= MAX_CONSISTENCY_RETRIES) throw error;
-        rateLimitAttempt--;
-        continue;
-      }
-
-      throw error;
-    }
+      return parsed.expeditions;
+    }, label);
   }
 
-  throw lastError;
+  const [p1Expeditions, p2Expeditions] = await Promise.all([
+    readPlayer("Player 1", player1Half),
+    readPlayer("Player 2", player2Half),
+  ]);
+
+  const raw = {
+    player1: { expeditions: p1Expeditions },
+    player2: { expeditions: p2Expeditions },
+  };
+
+  return analyzedGameSchema.parse(raw);
 }
