@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Pencil } from "lucide-react";
+import { ArrowLeftRight, Camera, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PhotoCapture } from "@/components/photo-capture";
 import { ManualEntry } from "@/components/manual-entry";
@@ -45,6 +45,7 @@ export default function ScorePage() {
   const [player2Data, setPlayer2Data] = useState<ExpeditionData[]>(
     createEmptyExpeditions(includePurple)
   );
+  const [swapCount, setSwapCount] = useState(0);
 
   const handlePhotoAnalyze = useCallback(
     async (base64Image: string) => {
@@ -258,7 +259,24 @@ export default function ScorePage() {
                 Verify the cards below and fix any errors before scoring.
               </p>
             </div>
+            {boardImage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mx-auto gap-2"
+                onClick={() => {
+                  const temp = player1Data;
+                  setPlayer1Data(player2Data);
+                  setPlayer2Data(temp);
+                  setSwapCount((c) => c + 1);
+                }}
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                Swap Players
+              </Button>
+            )}
             <ManualEntry
+              key={swapCount}
               onCalculate={(p1, p2) => {
                 setPlayer1Data(p1);
                 setPlayer2Data(p2);
