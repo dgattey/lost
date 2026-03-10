@@ -4,7 +4,7 @@
  */
 export async function resizeImage(
   file: File,
-  maxDimension = 2048
+  maxDimension = 2560
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -32,8 +32,7 @@ export async function resizeImage(
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to JPEG at 85% quality for good balance of size/quality
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
         // Strip the "data:image/jpeg;base64," prefix
         const base64 = dataUrl.split(",")[1];
         resolve(base64);

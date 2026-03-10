@@ -44,97 +44,110 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image very carefully before answering.
+const ANALYSIS_PROMPT = `You are an expert at analyzing photos of the Lost Cities card game board. Study the image VERY carefully before answering. Take your time — accuracy is far more important than speed.
 
-## Board Layout — Identifying the Center and Two Sides
+## STEP 1: Find the Center Board Strip
 
-The Lost Cities board has a **center strip** — a narrow column or row of colored expedition markers/icons. This strip separates the board into two distinct sides. Each player's played cards fan outward from the center strip toward their side of the table.
+The Lost Cities board has a **center strip** — a long, narrow board piece decorated with colored expedition artwork. It has 5 or 6 colored sections (yellow, blue, white, green, red, and optionally purple).
 
-**The center strip may be oriented in any direction depending on how the photo was taken:**
-- It may run **horizontally** (left to right) with cards fanning up and down.
-- It may run **vertically** (top to bottom) with cards fanning left and right.
-- It may be at an angle.
-- The photo may be taken from **directly above** (bird's eye / top-down view).
+**The center strip may be oriented in any direction.** It might run horizontally, vertically, or at an angle depending on how the photo was taken.
 
-**How to find it:** Look for the narrow strip of colorful expedition artwork (showing small illustrations in yellow, blue, white, green, red, and possibly purple). This is the center divider. Cards are played on BOTH sides of this strip, fanning outward.
+**How to identify it:** It's the physical game board piece — a rigid strip with colorful expedition illustrations printed on it. It is NOT a card. Each colored section has a small illustration matching that expedition's theme. Cards are played on BOTH sides of this strip.
 
-## Identifying Player 1 vs Player 2
+## STEP 2: Identify Played Card Columns vs Scattered Cards
 
-Once you locate the center strip:
-- **Player 1** = the side closest to the camera / bottom edge of the photo. Cards fan outward from the center toward the camera.
-- **Player 2** = the side farthest from the camera / top edge of the photo. Cards fan outward from the center away from the camera.
+This is the MOST CRITICAL step. You must distinguish between:
 
-**CRITICAL**: Each side of the board is scored completely independently. A player may have cards in some expedition colors but not others. Do NOT combine cards from both sides into one player. Analyze each side separately.
+### ✅ PLAYED CARDS (count these)
+- Organized in **neat columns or fans** extending outward from the center strip
+- Each column is aligned with one of the colored sections on the center strip
+- Cards within a column overlap in an orderly fan so you can see the top-left corner of each card
+- The column extends from the center strip outward toward a player's side
 
-It is completely normal for one player to have cards in colors that the other player does not. For example, Player 1 might have yellow, blue, and green expeditions while Player 2 has white, red, and purple.
+### ❌ NOT PLAYED CARDS (IGNORE these completely)
+- **Scattered/loose cards** lying on the table but NOT in an organized column from the center strip
+- **Cards in players' hands** or being held
+- **Discard pile cards** sitting ON TOP of the center strip itself
+- **Cards at the edges or corners** of the table that aren't connected to a column
+- Any cards that are **randomly arranged**, not fanned in a neat column
 
-## Expedition Colors
+**CRITICAL ERROR TO AVOID:** If you see cards of a certain color lying near the table edge or scattered about, but they are NOT part of an organized column extending from the center strip, do NOT count them for either player. These are likely cards in a draw pile, a player's hand, or discards.
 
-Standard colors on every board: **yellow, blue, white, green, red**.
-Some editions add a 6th color: **purple**. Include it only if you see a purple column on the center strip.
+## STEP 3: Identify Player 1 vs Player 2
 
-The colors on the center strip are arranged in order (typically: yellow, blue, white, green, red, and purple if present). Each color column on the center strip has a matching color of cards on either side.
+Once you find the center strip:
+- **Player 1** = cards fanning outward from the center strip toward the **bottom/near edge** of the photo (closer to camera)
+- **Player 2** = cards fanning outward from the center strip toward the **top/far edge** of the photo (away from camera)
 
-## Card Types — How to Tell Them Apart
+If the board is sideways: Player 1 = left side, Player 2 = right side. Use the center strip as the dividing line.
 
-This is critical. Each expedition color has two types of cards, and you MUST distinguish between them:
+**CRITICAL**: Analyze each side COMPLETELY INDEPENDENTLY. Do NOT mix cards from one side into the other. A player may have expeditions in some colors but not others — this is normal.
 
-### Wager (Investment/Handshake) Cards
-- There are exactly **3 wager cards per color** in the game (so up to 3 can appear in a single column).
-- They show a **handshake illustration** — two hands clasping/shaking — as the main artwork on the card face.
-- **They have NO number.** Where a numbered card would show a digit (like "5" or "8"), a wager card instead shows the handshake symbol.
-- In the **upper-left corner**, instead of a number, there is a **small handshake icon** or the corner may show the expedition symbol without any digit.
-- Wager cards are almost always played **first** in a column, meaning they sit **closest to the center strip** before any numbered cards.
-- Wager cards have the same colored border/background as their expedition color, so they blend in visually with the numbered cards.
+## STEP 4: Identify Expedition Colors on Each Card
 
-### Numbered Cards
-- Values **2 through 10** (one of each per color).
-- They display a **large printed number** prominently on the card face and in the **upper-left corner**.
-- Easy to identify: if you can read a digit on the card, it's a numbered card.
+Lost Cities cards have distinct color themes. Match each card's COLOR to the expedition:
+- **Yellow** — Desert/sand artwork, amber/gold card borders, warm yellow tones
+- **Blue** — Ocean/water artwork, blue card borders, cool blue tones
+- **White** — Snow/mountain/ice artwork, white/grey card borders, pale/silver tones
+- **Green** — Jungle/vegetation artwork, green card borders, forest green tones
+- **Red** — Volcano/fire/lava artwork, red card borders, bright red tones
+- **Purple** — Crystal/cave artwork, purple/violet card borders, deep purple tones (only in 6-color editions)
 
-## Counting Wager Cards — This Is the Hardest Part
+**IMPORTANT:** A card's color should match the center strip section it is aligned with. If a card is in the column extending from the yellow section of the center strip, it should be a yellow card. If there's a mismatch, re-examine which column the card actually belongs to.
 
-Wager cards look nearly identical to each other (same handshake art, same color). When 2 or 3 are stacked, they overlap and are easy to undercount. Use these techniques:
+## STEP 5: Count Total Cards in Each Column (CRITICAL)
 
-1. **Count card edges**: Each physical card in a fan/stack has its own visible edge or corner. Count the number of separate card edges you can see between the center strip and the first numbered card. Each edge = one card.
-2. **Look for offset corners**: When multiple wager cards are stacked, each one's corner is slightly offset from the previous. Count these offset corners.
-3. **Check card thickness**: A thicker-looking "card" near the center strip may actually be 2 or 3 overlapping wager cards. Look for any separation lines between them.
-4. **Cross-check with total count**: After identifying all cards in a column, verify: total card edges visible = wagerCount + number of cardValues. If these don't add up, recount.
+**This step is essential for accuracy.** Before identifying individual cards, first COUNT the total number of physical cards in each column by counting card edges, corners, or visible separations.
 
-**Common mistake**: Seeing multiple overlapping wager cards but counting them as just 1. Always look for evidence of additional cards underneath.
+Each physical card in a fanned column has its own visible edge or corner that sticks out. Count these carefully:
+- Look along the edge of each column for distinct card corners/edges
+- Pay special attention to the cards CLOSEST to the center strip — wager cards overlap heavily and are easy to miss
+- If the stack looks "thicker" near the center strip, it likely has multiple wager cards underneath
 
-## Step-by-Step Analysis Process
+Report this count as **totalCardsInColumn** for each expedition.
 
-Follow this process methodically:
+## STEP 6: Identify Numbered Cards
 
-**Step 1: Find the center strip** and determine its orientation.
+Go through each column and identify every card that has a **visible printed number** (2–10). These are the numbered cards. Add them to **cardValues**.
 
-**Step 2: Identify which side is Player 1 and which is Player 2.**
+Numbers appear both as large text on the card face and in the upper-left corner. If you can see any digit on a card, it's a numbered card.
 
-**Step 3: For EACH expedition color, analyze Player 1's side:**
-1. Count the **total number of separate card edges** visible on Player 1's side of that color.
-2. Starting from the card nearest the center strip, examine each card:
-   - No number / handshake symbol → wager card (increment wagerCount)
-   - Visible number (2–10) → numbered card (add to cardValues)
-3. Verify: wagerCount + len(cardValues) should equal the total card edges you counted.
-4. If the numbers don't add up, look again for missed wager cards or missed numbered cards.
-5. If no cards for this color on Player 1's side → wagerCount: 0, cardValues: [].
+## STEP 7: Calculate Wager Count from the Difference
 
-**Step 4: For EACH expedition color, analyze Player 2's side** using the same process. Cards on the far side may appear upside-down or at an angle — look carefully at each one.
+**wagerCount = totalCardsInColumn − number of identified numbered cards**
 
-## Critical Rules
+Wager (handshake) cards are the ones WITHOUT a number. They show a handshake illustration and sit closest to the center strip. Rather than trying to identify them visually (which is hard when they overlap), use the MATH:
+- If you counted 7 total card edges in a column but only found 6 numbered cards → **wagerCount = 1**
+- If you counted 10 total card edges but only found 7 numbered cards → **wagerCount = 3**
+- If the total matches the numbered cards exactly → **wagerCount = 0**
 
-- A card with a number is ALWAYS a numbered card, never a wager.
-- A wager card NEVER has a number — it shows ONLY the handshake symbol.
-- Wager cards sit closest to the center strip, before numbered cards in a column.
-- Each numbered value (2–10) can appear at most once per color per player.
-- Each color can have at most 3 wager cards per player.
-- Having 2 or 3 wager cards in a single expedition is VERY COMMON. Do NOT default to 0 or 1 — carefully count card edges near the center.
-- Look carefully at partially obscured cards — the upper-left corner is usually still visible.
-- Cards on the far side of the board may appear upside-down or at an angle — look carefully.
-- Always report card values in ascending numerical order.
-- Include ALL colors visible on the board for BOTH players, even if a column is empty for one of them.
-- NEVER mix cards from one side of the board into the other player's results.`;
+This is more reliable than trying to visually identify handshake symbols on overlapping cards.
+
+## STEP 8: Final Verification Checklist
+
+Before producing your answer, verify:
+- [ ] Every card you counted is part of an ORGANIZED COLUMN extending from the center strip
+- [ ] NO scattered, loose, or hand-held cards were counted
+- [ ] NO cards sitting ON the center strip (discards) were counted
+- [ ] Each card was assigned to ONLY ONE player (the player on that card's side of the center strip)
+- [ ] Card colors match their column's position on the center strip
+- [ ] No numbered value appears twice in the same color for the same player
+- [ ] For each column: totalCardsInColumn = wagerCount + count(cardValues)
+- [ ] Wager count is 0–3 for each expedition
+- [ ] Card values are reported in ascending order
+
+## Rules Summary
+
+- Only count cards in organized columns extending from the center strip
+- IGNORE all scattered, loose, held, or discarded cards
+- COUNT TOTAL CARD EDGES in each column first, then identify numbers, then derive wagers from the math
+- A card with a number is ALWAYS a numbered card (2–10)
+- A wager card has NO number — only the handshake symbol
+- Each value 2–10 appears at most once per color per player
+- Max 3 wager cards per color per player
+- Report cardValues in ascending order
+- Include all board colors for both players (empty columns = totalCardsInColumn:0, wagerCount:0, cardValues:[])
+- NEVER assign cards from one side of the center strip to the other player`;
 
 const EXPEDITION_SCHEMA = {
   type: "object" as const,
@@ -143,13 +156,14 @@ const EXPEDITION_SCHEMA = {
       type: "string" as const,
       enum: ["yellow", "blue", "white", "green", "red", "purple"],
     },
+    totalCardsInColumn: { type: "integer" as const },
     wagerCount: { type: "integer" as const },
     cardValues: {
       type: "array" as const,
       items: { type: "integer" as const },
     },
   },
-  required: ["color", "wagerCount", "cardValues"],
+  required: ["color", "totalCardsInColumn", "wagerCount", "cardValues"],
 };
 
 const PLAYER_SCHEMA = {
@@ -206,7 +220,7 @@ export async function analyzeBoard(
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           thinkingConfig: {
-            thinkingBudget: 16384,
+            thinkingBudget: 24576,
           },
         },
       });
