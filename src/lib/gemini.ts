@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import { Jimp } from "jimp";
 import { GoogleGenAI, ApiError } from "@google/genai";
 import {
   analyzedGameSchema,
@@ -179,33 +179,22 @@ async function callWithRetry<T>(
 // Image cropping
 // ---------------------------------------------------------------------------
 
-interface CropRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
 /**
  * Crop the image into two halves (Side A and Side B) at the center strip.
  *
  * Side A = top or left half. Side B = bottom or right half. The caller
  * decides which side maps to which player — the crop itself is neutral.
  *
- * Handles EXIF auto-rotation so phone photos are normalized before cropping.
+ * Uses Jimp (pure JS, no native dependencies) for Vercel compatibility.
  */
 export async function cropImageHalves(
   imageBase64: string,
   layout: BoardLayout
 ): Promise<{ sideA: string; sideB: string }> {
   const imgBuffer = Buffer.from(imageBase64, "base64");
-
-  // Auto-rotate based on EXIF orientation, then get true pixel dimensions
-  const rotated = sharp(imgBuffer).rotate();
-  const metadata = await rotated.metadata();
-  const width = metadata.width!;
-  const height = metadata.height!;
-  const normalizedBuffer = await rotated.toBuffer();
+  const img = await Jimp.read(imgBuffer);
+  const width = img.width;
+  const height = img.height;
 
   const splitPct = Math.max(15, Math.min(85, layout.splitPercent));
 
@@ -213,51 +202,42 @@ export async function cropImageHalves(
   const distFromCenter = Math.abs(splitPct - 50);
   const overlapPct = Math.max(3, 8 - distFromCenter * 0.1);
 
-  let sideACrop: CropRect;
-  let sideBCrop: CropRect;
+  let cropA: { x: number; y: number; w: number; h: number };
+  let cropB: { x: number; y: number; w: number; h: number };
 
   if (layout.splitAxis === "y") {
     const splitY = Math.round((height * splitPct) / 100);
     const overlapPx = Math.round((height * overlapPct) / 100);
 
-    sideACrop = {
-      left: 0,
-      top: 0,
-      width,
-      height: Math.min(height, splitY + overlapPx),
-    };
-    sideBCrop = {
-      left: 0,
-      top: Math.max(0, splitY - overlapPx),
-      width,
-      height: height - Math.max(0, splitY - overlapPx),
-    };
+    const aH = Math.min(height, splitY + overlapPx);
+    const bTop = Math.max(0, splitY - overlapPx);
+
+    cropA = { x: 0, y: 0, w: width, h: aH };
+    cropB = { x: 0, y: bTop, w: width, h: height - bTop };
   } else {
     const splitX = Math.round((width * splitPct) / 100);
     const overlapPx = Math.round((width * overlapPct) / 100);
 
-    sideACrop = {
-      left: 0,
-      top: 0,
-      width: Math.min(width, splitX + overlapPx),
-      height,
-    };
-    sideBCrop = {
-      left: Math.max(0, splitX - overlapPx),
-      top: 0,
-      width: width - Math.max(0, splitX - overlapPx),
-      height,
-    };
+    const aW = Math.min(width, splitX + overlapPx);
+    const bLeft = Math.max(0, splitX - overlapPx);
+
+    cropA = { x: 0, y: 0, w: aW, h: height };
+    cropB = { x: bLeft, y: 0, w: width - bLeft, h: height };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Jimp's crop types are overly complex
+  const sideAImg = img.clone().crop(cropA as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sideBImg = img.clone().crop(cropB as any);
+
   const [sideABuffer, sideBBuffer] = await Promise.all([
-    sharp(normalizedBuffer).extract(sideACrop).jpeg({ quality: 92 }).toBuffer(),
-    sharp(normalizedBuffer).extract(sideBCrop).jpeg({ quality: 92 }).toBuffer(),
+    sideAImg.getBuffer("image/jpeg", { quality: 92 }),
+    sideBImg.getBuffer("image/jpeg", { quality: 92 }),
   ]);
 
   return {
-    sideA: sideABuffer.toString("base64"),
-    sideB: sideBBuffer.toString("base64"),
+    sideA: Buffer.from(sideABuffer).toString("base64"),
+    sideB: Buffer.from(sideBBuffer).toString("base64"),
   };
 }
 
