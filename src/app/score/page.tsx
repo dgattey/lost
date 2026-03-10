@@ -99,8 +99,20 @@ export default function ScorePage() {
           });
         };
 
-        const p1Expeditions = mapExpeditions(data.player1.expeditions);
-        const p2Expeditions = mapExpeditions(data.player2.expeditions);
+        let p1Expeditions = mapExpeditions(data.player1.expeditions);
+        let p2Expeditions = mapExpeditions(data.player2.expeditions);
+
+        // Auto-swap to match previous round's player assignment.
+        // If the user swapped players in the last photo-scanned round,
+        // apply the same swap here so players stay consistent even if
+        // the photo was taken from a different angle.
+        const lastPhotoRound = [...rounds]
+          .reverse()
+          .find((r) => r.inputMethod === "photo");
+        if (lastPhotoRound?.swapped) {
+          [p1Expeditions, p2Expeditions] = [p2Expeditions, p1Expeditions];
+          setSwapCount((c) => c + 1);
+        }
 
         setPlayer1Data(p1Expeditions);
         setPlayer2Data(p2Expeditions);
@@ -114,7 +126,7 @@ export default function ScorePage() {
         setIsAnalyzing(false);
       }
     },
-    [includePurple, setIncludePurple]
+    [includePurple, setIncludePurple, rounds]
   );
 
   const handleManualCalculate = useCallback(
@@ -134,15 +146,17 @@ export default function ScorePage() {
 
   const handleSaveRound = useCallback(() => {
     if (!gameResult) return;
+    const isSwapped = swapCount % 2 === 1;
     addRound({
       result: gameResult,
       player1Expeditions: player1Data,
       player2Expeditions: player2Data,
       boardImage,
       inputMethod: boardImage ? "photo" : "manual",
+      swapped: isSwapped,
     });
     router.push("/");
-  }, [gameResult, addRound, player1Data, player2Data, boardImage, router]);
+  }, [gameResult, addRound, player1Data, player2Data, boardImage, router, swapCount]);
 
   const handleEditCards = useCallback(() => {
     setStep("review");
