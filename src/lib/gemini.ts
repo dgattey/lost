@@ -55,10 +55,10 @@ const LAYOUT_PROMPT = `You are analyzing a photo of a Lost Cities card game. Ide
 Find the **center board strip** — a long, narrow game board piece with colored expedition sections. Cards are played in organized fans on both sides of this strip.
 
 Report:
-1. **boardColors**: Which expedition colors appear on the center strip (from the standard set: yellow, blue, white, green, red, purple).
-2. **centerLinePercent**: Where is the center strip located? Express as a percentage (0-100) along the axis perpendicular to the strip:
-   - If the strip is roughly horizontal: what percentage from the TOP of the image is the center strip? (e.g., 50 means middle)
-   - If the strip is roughly vertical: what percentage from the LEFT of the image is the center strip?
+1. **boardColors**: Which expedition colors appear on the center strip (from: yellow, blue, white, green, red, purple).
+2. **centerLinePercent**: Where is the center strip located? Express as a percentage (0–100):
+   - If horizontal strip: percentage from the TOP of the image
+   - If vertical strip: percentage from the LEFT of the image
 3. **orientation**: Is the center strip roughly "horizontal" or "vertical"?
 
 Player 1's cards fan toward the bottom/right of the image. Player 2's cards fan toward the top/left.`;
@@ -98,22 +98,24 @@ function makePlayerPrompt(boardColors: string[]): string {
 
 The board has these expedition colors: **${colorList}**.
 
-For EACH color, look for an organized fan of cards. If present, read them. If no cards for a color, report it as empty.
+For EACH color, look for an organized fan of cards extending from the center strip edge. If present, read them. If no organized fan for a color, report it as empty.
 
-For each color with cards:
+## How to read each column
+
+For each color with an organized fan of cards:
 1. **totalCardsInColumn** — Count physical cards by counting visible card edges/corners. Do NOT count the center strip artwork.
 2. **cardValues** — Every visible number (2–10), in ascending order.
 3. **wagerCount** — totalCardsInColumn minus count(cardValues). Wager cards have a handshake symbol (NO number) and are closest to the center strip edge.
 
-Rules:
+## Critical rules
 - Each number 2–10 appears at most ONCE per color
 - Max 3 wager cards per color
 - **9 vs 6**: If cards appear upside-down, a "6" is actually **9**. If a column has 8 and 10 but no 9, look for an upside-down 6.
 - Report cardValues in ascending order
-- IGNORE scattered/loose cards not in organized fans
+- **IGNORE scattered/loose cards** not in organized fans extending from the center strip. Cards lying alone or in piles away from the center strip are NOT played cards.
 - totalCardsInColumn MUST equal wagerCount + count(cardValues)
 
-For colors with no cards: totalCardsInColumn=0, wagerCount=0, cardValues=[].`;
+For colors with no organized fan: totalCardsInColumn=0, wagerCount=0, cardValues=[].`;
 }
 
 const EXPEDITION_SCHEMA = {
@@ -184,7 +186,7 @@ async function cropImageHalves(
   const height = metadata.height!;
 
   const splitPercent = Math.max(20, Math.min(80, layout.centerLinePercent));
-  const overlap = 5; // % overlap so cards near the center strip aren't cut off
+  const overlap = 5;
 
   let p1Crop: { left: number; top: number; width: number; height: number };
   let p2Crop: { left: number; top: number; width: number; height: number };
@@ -193,14 +195,12 @@ async function cropImageHalves(
     const splitY = Math.round((height * splitPercent) / 100);
     const overlapPx = Math.round((height * overlap) / 100);
 
-    // Player 1 = bottom half (near camera)
     p1Crop = {
       left: 0,
       top: Math.max(0, splitY - overlapPx),
       width,
       height: height - Math.max(0, splitY - overlapPx),
     };
-    // Player 2 = top half (far from camera)
     p2Crop = {
       left: 0,
       top: 0,
@@ -211,14 +211,12 @@ async function cropImageHalves(
     const splitX = Math.round((width * splitPercent) / 100);
     const overlapPx = Math.round((width * overlap) / 100);
 
-    // Player 1 = right half
     p1Crop = {
       left: Math.max(0, splitX - overlapPx),
       top: 0,
       width: width - Math.max(0, splitX - overlapPx),
       height,
     };
-    // Player 2 = left half
     p2Crop = {
       left: 0,
       top: 0,
@@ -298,7 +296,7 @@ export async function analyzeBoard(
     inlineData: { mimeType: "image/jpeg" as const, data: imageBase64 },
   };
 
-  // --- Pass 1: Board layout + center strip position ---
+  // --- Pass 1: Board layout ---
   console.log("[gemini] Pass 1: Identifying board layout…");
   const layout = await callWithRetry(async () => {
     const res = await client.models.generateContent({
@@ -330,9 +328,8 @@ export async function analyzeBoard(
     layout
   );
 
-  // --- Pass 2: Per-player card reading on cropped halves (parallel) ---
+  // --- Pass 2: Per-player card reading (parallel) ---
   console.log("[gemini] Pass 2: Reading cards per player (parallel)…");
-
   const prompt = makePlayerPrompt(layout.boardColors);
 
   async function readPlayer(
@@ -347,12 +344,7 @@ export async function analyzeBoard(
             role: "user",
             parts: [
               { text: prompt },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: halfBase64,
-                },
-              },
+              { inlineData: { mimeType: "image/jpeg", data: halfBase64 } },
             ],
           },
         ],
@@ -385,6 +377,22 @@ export async function analyzeBoard(
     readPlayer("Player 1", player1Half),
     readPlayer("Player 2", player2Half),
   ]);
+
+  // Log results
+  for (const [label, exps] of [
+    ["P1", p1Expeditions],
+    ["P2", p2Expeditions],
+  ] as const) {
+    const active = exps.filter(
+      (e) => e.wagerCount > 0 || e.cardValues.length > 0
+    );
+    if (active.length > 0) {
+      const summary = active
+        .map((e) => `${e.color}(w=${e.wagerCount},c=[${e.cardValues}])`)
+        .join(", ");
+      console.log(`[gemini] ${label}: ${summary}`);
+    }
+  }
 
   const raw = {
     player1: { expeditions: p1Expeditions },
