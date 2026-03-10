@@ -328,7 +328,7 @@ export default function Home() {
         {!hasRounds && (
           <>
             <div className="text-center text-xs text-muted-foreground max-w-xs mx-auto mt-6">
-              <p>Photo scanning requires an AI API key.</p>
+              <p>Photo scanning requires an AI API key and a top-down photo of the full board.</p>
             </div>
 
             <footer className="text-center text-xs text-muted-foreground/70 max-w-xs mx-auto pt-4 mt-4 border-t border-border/50 space-y-2">
