@@ -56,12 +56,24 @@ Find the **center board strip** — a long, narrow game board piece with colored
 
 Report:
 1. **boardColors**: Which expedition colors appear on the center strip (from: yellow, blue, white, green, red, purple).
-2. **centerLinePercent**: Where is the center strip located? Express as a percentage (0–100):
-   - If horizontal strip: percentage from the TOP of the image
-   - If vertical strip: percentage from the LEFT of the image
-3. **orientation**: Is the center strip roughly "horizontal" or "vertical"?
 
-Player 1's cards fan toward the bottom/right of the image. Player 2's cards fan toward the top/left.`;
+2. **orientation**: How is the center strip oriented in this photo?
+   - "horizontal" — strip runs left-to-right (cards fan up and down)
+   - "vertical" — strip runs top-to-bottom (cards fan left and right)
+   - "diagonal" — strip is at an angle
+
+3. **splitAxis**: Which image axis should we split along to separate the two players?
+   - "x" — split with a vertical line (left half vs right half). Use when the strip is vertical or diagonal-leaning-vertical.
+   - "y" — split with a horizontal line (top half vs bottom half). Use when the strip is horizontal or diagonal-leaning-horizontal.
+
+4. **splitPercent**: Where along that axis is the center strip? (0–100)
+   - If splitAxis="y": percentage from the TOP of the image (e.g. 40 means the strip is 40% down from the top)
+   - If splitAxis="x": percentage from the LEFT of the image (e.g. 50 means the strip is in the middle)
+
+5. **player1Side**: Which side of the split line has Player 1's cards?
+   - If splitAxis="y": "bottom" or "top"
+   - If splitAxis="x": "right" or "left"
+   Player 1 is typically the player closest to the camera (bottom/right of image), but check the actual image.`;
 
 const LAYOUT_SCHEMA = {
   type: "object" as const,
@@ -73,19 +85,35 @@ const LAYOUT_SCHEMA = {
         enum: ["yellow", "blue", "white", "green", "red", "purple"],
       },
     },
-    centerLinePercent: { type: "integer" as const },
     orientation: {
       type: "string" as const,
-      enum: ["horizontal", "vertical"],
+      enum: ["horizontal", "vertical", "diagonal"],
+    },
+    splitAxis: {
+      type: "string" as const,
+      enum: ["x", "y"],
+    },
+    splitPercent: { type: "integer" as const },
+    player1Side: {
+      type: "string" as const,
+      enum: ["top", "bottom", "left", "right"],
     },
   },
-  required: ["boardColors", "centerLinePercent", "orientation"],
+  required: [
+    "boardColors",
+    "orientation",
+    "splitAxis",
+    "splitPercent",
+    "player1Side",
+  ],
 };
 
 interface BoardLayout {
   boardColors: string[];
-  centerLinePercent: number;
-  orientation: "horizontal" | "vertical";
+  orientation: "horizontal" | "vertical" | "diagonal";
+  splitAxis: "x" | "y";
+  splitPercent: number;
+  player1Side: "top" | "bottom" | "left" | "right";
 }
 
 // ---------------------------------------------------------------------------
@@ -176,63 +204,96 @@ async function callWithRetry<T>(
 // Image cropping
 // ---------------------------------------------------------------------------
 
-async function cropImageHalves(
+interface CropRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Crop the image into two player halves based on the layout detection.
+ *
+ * Handles:
+ * - EXIF auto-rotation (sharp .rotate() with no args normalizes orientation)
+ * - Horizontal, vertical, and diagonal board strips
+ * - Off-center splits (overlap scales with distance from center)
+ * - Model-determined player side assignment (no hardcoded assumption)
+ */
+export async function cropImageHalves(
   imageBase64: string,
   layout: BoardLayout
 ): Promise<{ player1Half: string; player2Half: string }> {
   const imgBuffer = Buffer.from(imageBase64, "base64");
-  const metadata = await sharp(imgBuffer).metadata();
+
+  // Auto-rotate based on EXIF orientation, then get true pixel dimensions
+  const rotated = sharp(imgBuffer).rotate();
+  const metadata = await rotated.metadata();
   const width = metadata.width!;
   const height = metadata.height!;
+  const normalizedBuffer = await rotated.toBuffer();
 
-  const splitPercent = Math.max(20, Math.min(80, layout.centerLinePercent));
-  const overlap = 5;
+  const splitPct = Math.max(15, Math.min(85, layout.splitPercent));
 
-  let p1Crop: { left: number; top: number; width: number; height: number };
-  let p2Crop: { left: number; top: number; width: number; height: number };
+  // Scale overlap: more overlap when the strip is near center (cards are
+  // longer), less when it's far off to one side (the smaller half needs
+  // all the pixels it can get). Range: 3–8% of the split axis.
+  const distFromCenter = Math.abs(splitPct - 50);
+  const overlapPct = Math.max(3, 8 - distFromCenter * 0.1);
 
-  if (layout.orientation === "horizontal") {
-    const splitY = Math.round((height * splitPercent) / 100);
-    const overlapPx = Math.round((height * overlap) / 100);
+  let sideACrop: CropRect;
+  let sideBCrop: CropRect;
 
-    p1Crop = {
-      left: 0,
-      top: Math.max(0, splitY - overlapPx),
-      width,
-      height: height - Math.max(0, splitY - overlapPx),
-    };
-    p2Crop = {
+  if (layout.splitAxis === "y") {
+    const splitY = Math.round((height * splitPct) / 100);
+    const overlapPx = Math.round((height * overlapPct) / 100);
+
+    // Side A = top half, Side B = bottom half
+    sideACrop = {
       left: 0,
       top: 0,
       width,
       height: Math.min(height, splitY + overlapPx),
     };
-  } else {
-    const splitX = Math.round((width * splitPercent) / 100);
-    const overlapPx = Math.round((width * overlap) / 100);
-
-    p1Crop = {
-      left: Math.max(0, splitX - overlapPx),
-      top: 0,
-      width: width - Math.max(0, splitX - overlapPx),
-      height,
+    sideBCrop = {
+      left: 0,
+      top: Math.max(0, splitY - overlapPx),
+      width,
+      height: height - Math.max(0, splitY - overlapPx),
     };
-    p2Crop = {
+  } else {
+    const splitX = Math.round((width * splitPct) / 100);
+    const overlapPx = Math.round((width * overlapPct) / 100);
+
+    // Side A = left half, Side B = right half
+    sideACrop = {
       left: 0,
       top: 0,
       width: Math.min(width, splitX + overlapPx),
       height,
     };
+    sideBCrop = {
+      left: Math.max(0, splitX - overlapPx),
+      top: 0,
+      width: width - Math.max(0, splitX - overlapPx),
+      height,
+    };
   }
 
-  const [p1Buffer, p2Buffer] = await Promise.all([
-    sharp(imgBuffer).extract(p1Crop).jpeg({ quality: 92 }).toBuffer(),
-    sharp(imgBuffer).extract(p2Crop).jpeg({ quality: 92 }).toBuffer(),
+  const [sideABuffer, sideBBuffer] = await Promise.all([
+    sharp(normalizedBuffer).extract(sideACrop).jpeg({ quality: 92 }).toBuffer(),
+    sharp(normalizedBuffer).extract(sideBCrop).jpeg({ quality: 92 }).toBuffer(),
   ]);
 
+  // Assign to player 1 / player 2 based on model's detection
+  const p1Side = layout.player1Side;
+  const p1IsSideA =
+    (layout.splitAxis === "y" && p1Side === "top") ||
+    (layout.splitAxis === "x" && p1Side === "left");
+
   return {
-    player1Half: p1Buffer.toString("base64"),
-    player2Half: p2Buffer.toString("base64"),
+    player1Half: (p1IsSideA ? sideABuffer : sideBBuffer).toString("base64"),
+    player2Half: (p1IsSideA ? sideBBuffer : sideABuffer).toString("base64"),
   };
 }
 
@@ -277,14 +338,14 @@ export function findConsistencyProblems(
  * Analyze a Lost Cities board photo using a two-pass approach with
  * image cropping:
  *
- * **Pass 1** — Identify the board center strip position and orientation,
- * plus which colors are on the board.
+ * **Pass 1** — Identify the board center strip position, orientation
+ * (horizontal/vertical/diagonal), split axis, split position, and
+ * which side Player 1 is on. Works for any photo rotation.
  *
- * **Crop** — Split the image into two halves at the center strip, one
- * per player. Each half only shows that player's cards.
+ * **Crop** — Split the EXIF-normalized image into two halves at the
+ * center strip, one per player. Overlap scales with split position.
  *
- * **Pass 2** — Two parallel Gemini calls, one per cropped half. Each
- * call reads only the cards visible in its half.
+ * **Pass 2** — Two parallel Gemini calls, one per cropped half.
  *
  * All calls use temperature=0 for determinism.
  */
@@ -317,8 +378,8 @@ export async function analyzeBoard(
   }, "layout");
 
   console.log(
-    `[gemini] Layout: colors=${layout.boardColors.join(",")}, ` +
-      `center=${layout.centerLinePercent}%, orientation=${layout.orientation}`
+    `[gemini] Layout: ${layout.orientation}, split=${layout.splitAxis}@${layout.splitPercent}%, ` +
+      `P1=${layout.player1Side}, colors=${layout.boardColors.join(",")}`
   );
 
   // --- Crop image into two halves ---
