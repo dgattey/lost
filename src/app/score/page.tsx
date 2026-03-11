@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Pencil } from "lucide-react";
+import { ArrowLeftRight, Camera, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PhotoCapture } from "@/components/photo-capture";
 import { ManualEntry } from "@/components/manual-entry";
@@ -10,14 +10,15 @@ import { ScoreResults } from "@/components/score-results";
 import { AppHeader } from "@/components/app-header";
 import { scoreGame } from "@/lib/scoring";
 import { useGame } from "@/lib/game-context";
+import { cropImageHalves } from "@/lib/image-utils";
 import type {
   AppStep,
   ExpeditionColor,
   ExpeditionData,
   GameResult,
-  AnalyzedGameData,
 } from "@/lib/types";
 import { EXPEDITION_COLORS, EXPEDITION_COLORS_WITH_PURPLE } from "@/lib/types";
+import type { BoardLayout } from "@/lib/gemini";
 
 function createEmptyExpeditions(includePurple: boolean): ExpeditionData[] {
   const colors: readonly ExpeditionColor[] = includePurple
@@ -45,6 +46,7 @@ export default function ScorePage() {
   const [player2Data, setPlayer2Data] = useState<ExpeditionData[]>(
     createEmptyExpeditions(includePurple)
   );
+  const [swapCount, setSwapCount] = useState(0);
 
   const handlePhotoAnalyze = useCallback(
     async (base64Image: string) => {
@@ -54,41 +56,64 @@ export default function ScorePage() {
       setStep("analyzing");
 
       try {
-        const response = await fetch("/api/analyze", {
+        // Step 1: Detect board layout (server-side)
+        const layoutRes = await fetch("/api/analyze/layout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64Image }),
         });
+        const layoutResult = await layoutRes.json();
+        if (!layoutRes.ok) throw new Error(layoutResult.error || "Layout detection failed");
+        const layout = layoutResult.data as BoardLayout;
 
-        const result = await response.json();
+        // Step 2: Crop image into two halves (client-side, browser canvas)
+        const { sideA, sideB } = await cropImageHalves(
+          base64Image,
+          layout.splitAxis,
+          layout.splitPercent
+        );
 
-        if (!response.ok) {
-          throw new Error(result.error || "Analysis failed");
-        }
+        // Step 3: Read cards from both halves (server-side, parallel)
+        const [cardsARes, cardsBRes] = await Promise.all([
+          fetch("/api/analyze/cards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: sideA, boardColors: layout.boardColors }),
+          }),
+          fetch("/api/analyze/cards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: sideB, boardColors: layout.boardColors }),
+          }),
+        ]);
 
-        const data = result.data as AnalyzedGameData;
+        const [cardsAResult, cardsBResult] = await Promise.all([
+          cardsARes.json(),
+          cardsBRes.json(),
+        ]);
 
-        const aiFoundPurple = [
-          ...data.player1.expeditions,
-          ...data.player2.expeditions,
-        ].some(
-          (e) =>
-            e.color === "purple" &&
-            (e.wagerCount > 0 || e.cardValues.length > 0)
+        if (!cardsARes.ok) throw new Error(cardsAResult.error || "Card reading failed (Side A)");
+        if (!cardsBRes.ok) throw new Error(cardsBResult.error || "Card reading failed (Side B)");
+
+        const sideAExps = cardsAResult.data.expeditions as { color: string; wagerCount: number; cardValues: number[] }[];
+        const sideBExps = cardsBResult.data.expeditions as { color: string; wagerCount: number; cardValues: number[] }[];
+
+        // Detect purple
+        const allExps = [...sideAExps, ...sideBExps];
+        const aiFoundPurple = allExps.some(
+          (e) => e.color === "purple" && (e.wagerCount > 0 || e.cardValues.length > 0)
         );
         const usePurple = includePurple || aiFoundPurple;
-        if (aiFoundPurple && !includePurple) {
-          setIncludePurple(true);
-        }
+        if (aiFoundPurple && !includePurple) setIncludePurple(true);
 
         const colors: readonly ExpeditionColor[] = usePurple
           ? EXPEDITION_COLORS_WITH_PURPLE
           : EXPEDITION_COLORS;
 
         const mapExpeditions = (
-          exps: AnalyzedGameData["player1"]["expeditions"]
-        ): ExpeditionData[] => {
-          return colors.map((color) => {
+          exps: { color: string; wagerCount: number; cardValues: number[] }[]
+        ): ExpeditionData[] =>
+          colors.map((color) => {
             const found = exps.find((e) => e.color === color);
             return {
               color,
@@ -96,10 +121,19 @@ export default function ScorePage() {
               cardValues: found?.cardValues ?? [],
             };
           });
-        };
 
-        const p1Expeditions = mapExpeditions(data.player1.expeditions);
-        const p2Expeditions = mapExpeditions(data.player2.expeditions);
+        // Side A → Player 1, Side B → Player 2 (user can swap in review)
+        let p1Expeditions = mapExpeditions(sideAExps);
+        let p2Expeditions = mapExpeditions(sideBExps);
+
+        // Auto-swap to match previous round's player assignment
+        const lastPhotoRound = [...rounds]
+          .reverse()
+          .find((r) => r.inputMethod === "photo");
+        if (lastPhotoRound?.swapped) {
+          [p1Expeditions, p2Expeditions] = [p2Expeditions, p1Expeditions];
+          setSwapCount((c) => c + 1);
+        }
 
         setPlayer1Data(p1Expeditions);
         setPlayer2Data(p2Expeditions);
@@ -113,7 +147,7 @@ export default function ScorePage() {
         setIsAnalyzing(false);
       }
     },
-    [includePurple, setIncludePurple]
+    [includePurple, setIncludePurple, rounds]
   );
 
   const handleManualCalculate = useCallback(
@@ -133,15 +167,17 @@ export default function ScorePage() {
 
   const handleSaveRound = useCallback(() => {
     if (!gameResult) return;
+    const isSwapped = swapCount % 2 === 1;
     addRound({
       result: gameResult,
       player1Expeditions: player1Data,
       player2Expeditions: player2Data,
       boardImage,
       inputMethod: boardImage ? "photo" : "manual",
+      swapped: isSwapped,
     });
     router.push("/");
-  }, [gameResult, addRound, player1Data, player2Data, boardImage, router]);
+  }, [gameResult, addRound, player1Data, player2Data, boardImage, router, swapCount]);
 
   const handleEditCards = useCallback(() => {
     setStep("review");
@@ -258,7 +294,24 @@ export default function ScorePage() {
                 Verify the cards below and fix any errors before scoring.
               </p>
             </div>
+            {boardImage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mx-auto gap-2"
+                onClick={() => {
+                  const temp = player1Data;
+                  setPlayer1Data(player2Data);
+                  setPlayer2Data(temp);
+                  setSwapCount((c) => c + 1);
+                }}
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                Swap Players
+              </Button>
+            )}
             <ManualEntry
+              key={swapCount}
               onCalculate={(p1, p2) => {
                 setPlayer1Data(p1);
                 setPlayer2Data(p2);

@@ -21,6 +21,7 @@ interface GameContextType {
     player2Expeditions: ExpeditionData[];
     boardImage: string | null;
     inputMethod: "photo" | "manual";
+    swapped?: boolean;
   }) => RoundData;
   updateRound: (
     roundNumber: number,
@@ -125,6 +126,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       player2Expeditions: ExpeditionData[];
       boardImage: string | null;
       inputMethod: "photo" | "manual";
+      swapped?: boolean;
     }): RoundData => {
       const roundNumber =
         rounds.length > 0
@@ -138,7 +140,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         boardImage: data.boardImage,
         inputMethod: data.inputMethod,
         timestamp: Date.now(),
-        swapped: false,
+        swapped: data.swapped ?? false,
       };
 
       if (data.boardImage) {
