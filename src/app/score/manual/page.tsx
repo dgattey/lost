@@ -1,7 +1,5 @@
-import { ScorePageClient } from "../score-page-client";
+import { ScoreManualRoute } from "../score-manual-route";
 
 export default function ScoreManualPage() {
-  return (
-    <ScorePageClient initialMethod="manual" startStepPhotoNote={null} />
-  );
+  return <ScoreManualRoute />;
 }

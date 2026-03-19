@@ -1,7 +1,5 @@
-import { ScorePageClient } from "../score-page-client";
+import { ScorePhotoRoute } from "../score-photo-route";
 
 export default function ScorePhotoPage() {
-  return (
-    <ScorePageClient initialMethod="photo" startStepPhotoNote={null} />
-  );
+  return <ScorePhotoRoute />;
 }
