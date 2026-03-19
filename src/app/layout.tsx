@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SiteFooter } from "@/components/site-footer";
 import { GameProvider } from "@/lib/game-context";
 import "./globals.css";
 
@@ -47,8 +48,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const year = new Date().getFullYear();
-
   return (
     <html
       lang="en"
@@ -57,19 +56,7 @@ export default function RootLayout({
       <body className="antialiased flex min-h-dvh flex-col">
         <GameProvider>
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-          <footer className="shrink-0 border-t border-border/50 px-4 py-3 text-center text-xs text-muted-foreground">
-            <p>
-              <span>© {year}. Created by </span>
-              <a
-                href="https://gattey.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-foreground/90 underline-offset-2 transition-colors hover:text-foreground hover:underline"
-              >
-                Dylan Gattey
-              </a>
-            </p>
-          </footer>
+          <SiteFooter />
         </GameProvider>
       </body>
     </html>
