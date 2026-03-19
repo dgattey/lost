@@ -1,11 +1,14 @@
 import { cacheLife } from "next/cache";
 import Link from "next/link";
-import { Camera } from "lucide-react";
+import { Camera, Pencil } from "lucide-react";
 
 const primaryCtaClasses =
   "inline-flex w-full h-14 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent bg-primary px-8 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/80 outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-5";
 
-/** Static home empty-state hero + primary CTA (cacheable shell). */
+const outlineCtaClasses =
+  "inline-flex w-full h-14 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-8 text-base font-medium transition-colors hover:bg-muted hover:text-foreground outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-input dark:bg-input/30 dark:hover:bg-input/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-5";
+
+/** Static home empty-state hero + entry points (deep-link into /score, skip picker step). */
 export async function CachedHomeHero() {
   "use cache";
   cacheLife("max");
@@ -13,18 +16,22 @@ export async function CachedHomeHero() {
   return (
     <>
       <div className="text-center">
-        <div className="text-5xl mb-4">🗺️</div>
-        <h2 className="text-2xl font-bold mb-2">Score Your Game</h2>
+        <div className="text-4xl mb-3">🗺️</div>
+        <h2 className="text-xl font-bold mb-1.5">Score Your Game</h2>
         <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-          Take a photo of your Lost Cities board or enter cards manually to
-          calculate scores instantly.
+          Scan a board photo or enter cards by hand — you go straight into
+          that flow.
         </p>
       </div>
 
       <div className="flex flex-col gap-3 w-full max-w-sm">
-        <Link href="/score" className={primaryCtaClasses}>
+        <Link href="/score?method=photo" className={primaryCtaClasses}>
           <Camera className="w-5 h-5" />
-          Score First Round
+          Scan Board Photo
+        </Link>
+        <Link href="/score?method=manual" className={outlineCtaClasses}>
+          <Pencil className="w-5 h-5" />
+          Enter Cards Manually
         </Link>
       </div>
     </>

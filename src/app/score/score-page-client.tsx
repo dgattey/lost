@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Camera, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,14 @@ import type {
 import { EXPEDITION_COLORS, EXPEDITION_COLORS_WITH_PURPLE } from "@/lib/types";
 import type { BoardLayout } from "@/lib/gemini";
 
+function initialStepForMethod(
+  method: "photo" | "manual" | null
+): AppStep {
+  if (method === "photo") return "capture";
+  if (method === "manual") return "manual-entry";
+  return "start";
+}
+
 function createEmptyExpeditions(includePurple: boolean): ExpeditionData[] {
   const colors: readonly ExpeditionColor[] = includePurple
     ? EXPEDITION_COLORS_WITH_PURPLE
@@ -33,14 +41,19 @@ function createEmptyExpeditions(includePurple: boolean): ExpeditionData[] {
 }
 
 export function ScorePageClient({
+  initialMethod,
   startStepPhotoNote,
 }: {
-  startStepPhotoNote: ReactNode;
+  initialMethod: "photo" | "manual" | null;
+  startStepPhotoNote: ReactNode | null;
 }) {
   const router = useRouter();
   const { includePurple, setIncludePurple, addRound, rounds } = useGame();
 
-  const [step, setStep] = useState<AppStep>("start");
+  const skippedStartRef = useRef(initialMethod !== null);
+  const [step, setStep] = useState<AppStep>(() =>
+    initialStepForMethod(initialMethod)
+  );
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,13 +203,25 @@ export function ScorePageClient({
 
   const handleBack = useCallback(() => {
     if (step === "capture" || step === "manual-entry") {
+      if (skippedStartRef.current) {
+        router.push("/");
+        return;
+      }
       setStep("start");
-    } else if (step === "review") {
-      setStep("start");
-    } else if (step === "results") {
+      return;
+    }
+    if (step === "analyzing") {
+      setStep("capture");
+      return;
+    }
+    if (step === "review") {
+      setStep(skippedStartRef.current ? "capture" : "start");
+      return;
+    }
+    if (step === "results") {
       setStep("review");
     }
-  }, [step]);
+  }, [step, router]);
 
   const backProps =
     step === "start"
@@ -204,24 +229,23 @@ export function ScorePageClient({
       : { onBack: handleBack };
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <AppHeader
         {...backProps}
         title={`Score Round ${rounds.length + 1}`}
       />
 
-      <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
-        {/* START */}
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full">
+        {/* START (bookmark / bare /score only) */}
         {step === "start" && (
-          <div className="flex flex-col items-center gap-8 pt-8">
+          <div className="flex flex-col items-center gap-5 pt-4">
             <div className="text-center">
-              <div className="text-5xl mb-4">🗺️</div>
-              <h2 className="text-2xl font-bold mb-2">
+              <div className="text-4xl mb-3">🗺️</div>
+              <h2 className="text-xl font-bold mb-1.5">
                 Round {rounds.length + 1}
               </h2>
               <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-                Take a photo of your Lost Cities board or enter cards manually
-                to calculate scores.
+                Photo scan or manual entry — same as from the home screen.
               </p>
             </div>
 

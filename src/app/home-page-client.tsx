@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Camera,
   Crown,
-  Plus,
+  Pencil,
   RotateCcw,
   Trophy,
 } from "lucide-react";
@@ -156,7 +156,7 @@ function RoundCard({ round }: { round: RoundData }) {
 
 function EmptyState({ hero }: { hero: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-8 pt-8">{hero}</div>
+    <div className="flex flex-col items-center gap-6 pt-4">{hero}</div>
   );
 }
 
@@ -251,10 +251,20 @@ function GameDashboard() {
 
       {/* Actions */}
       <div className="flex flex-col gap-3">
-        <Link href="/score" className="w-full">
+        <Link href="/score?method=photo" className="w-full">
           <Button size="lg" className="w-full h-14 text-base gap-2">
-            <Plus className="w-5 h-5" />
-            Score Round {rounds.length + 1}
+            <Camera className="w-5 h-5" />
+            Scan board — Round {rounds.length + 1}
+          </Button>
+        </Link>
+        <Link href="/score?method=manual" className="w-full">
+          <Button
+            size="lg"
+            variant="outline"
+            className="w-full h-14 text-base gap-2"
+          >
+            <Pencil className="w-5 h-5" />
+            Manual entry — Round {rounds.length + 1}
           </Button>
         </Link>
         <Button
@@ -285,9 +295,9 @@ export function HomePageClient({
   const hasRounds = rounds.length > 0;
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <AppHeader />
-      <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full">
         {hasRounds ? <GameDashboard /> : <EmptyState hero={emptyHero} />}
 
         {/* Purple expedition toggle */}
