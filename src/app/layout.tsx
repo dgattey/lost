@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   title: "Lost Cities Scorer",
   description:
     "Score your Lost Cities card game instantly — snap a photo or enter cards manually.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
