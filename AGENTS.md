@@ -54,6 +54,10 @@ A mobile-first PWA for scoring the **Lost Cities** card game. Two input modes: p
 
 - `GEMINI_API_KEY` – required for photo scanning (Gemini API)
 
+## Manual QA
+
+- Score flow vs round **edit** behavior and a full checklist: `docs/manual-test-walkthrough.md`
+
 ## Commands
 
 | Task | Command |
