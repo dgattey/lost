@@ -52,8 +52,21 @@ export default function RootLayout({
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable}`}
     >
-      <body className="antialiased">
-        <GameProvider>{children}</GameProvider>
+      <body className="antialiased flex min-h-dvh flex-col">
+        <GameProvider>
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          <footer className="shrink-0 border-t border-border/50 px-4 py-3 text-center text-xs text-muted-foreground">
+            <span>Created by </span>
+            <a
+              href="https://gattey.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/90 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            >
+              Dylan Gattey
+            </a>
+          </footer>
+        </GameProvider>
       </body>
     </html>
   );
