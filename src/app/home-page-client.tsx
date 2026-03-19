@@ -251,13 +251,13 @@ function GameDashboard() {
 
       {/* Actions */}
       <div className="flex flex-col gap-3">
-        <Link href="/score?method=photo" className="w-full">
+        <Link href="/score/photo" className="w-full">
           <Button size="lg" className="w-full h-14 text-base gap-2">
             <Camera className="w-5 h-5" />
             Scan board — Round {rounds.length + 1}
           </Button>
         </Link>
-        <Link href="/score?method=manual" className="w-full">
+        <Link href="/score/manual" className="w-full">
           <Button
             size="lg"
             variant="outline"

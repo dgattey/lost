@@ -25,11 +25,11 @@ export async function CachedHomeHero() {
       </div>
 
       <div className="flex flex-col gap-3 w-full max-w-sm">
-        <Link href="/score?method=photo" className={primaryCtaClasses}>
+        <Link href="/score/photo" className={primaryCtaClasses}>
           <Camera className="w-5 h-5" />
           Scan Board Photo
         </Link>
-        <Link href="/score?method=manual" className={outlineCtaClasses}>
+        <Link href="/score/manual" className={outlineCtaClasses}>
           <Pencil className="w-5 h-5" />
           Enter Cards Manually
         </Link>

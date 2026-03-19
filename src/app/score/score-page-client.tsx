@@ -2,9 +2,11 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Camera, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { PhotoCapture } from "@/components/photo-capture";
 import { ManualEntry } from "@/components/manual-entry";
 import { ScoreResults } from "@/components/score-results";
@@ -250,23 +252,26 @@ export function ScorePageClient({
             </div>
 
             <div className="flex flex-col gap-3 w-full max-w-sm">
-              <Button
-                size="lg"
-                className="w-full h-14 text-base gap-2"
-                onClick={() => setStep("capture")}
+              <Link
+                href="/score/photo"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "inline-flex w-full h-14 text-base gap-2"
+                )}
               >
                 <Camera className="w-5 h-5" />
                 Scan Board Photo
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full h-14 text-base gap-2"
-                onClick={() => setStep("manual-entry")}
+              </Link>
+              <Link
+                href="/score/manual"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "inline-flex w-full h-14 text-base gap-2"
+                )}
               >
                 <Pencil className="w-5 h-5" />
                 Enter Cards Manually
-              </Button>
+              </Link>
             </div>
 
             {startStepPhotoNote}
@@ -286,7 +291,7 @@ export function ScorePageClient({
                   className="mt-3"
                   onClick={() => {
                     setError(null);
-                    setStep("manual-entry");
+                    router.push("/score/manual");
                   }}
                 >
                   <Pencil className="w-4 h-4 mr-1" />

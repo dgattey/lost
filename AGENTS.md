@@ -10,8 +10,10 @@ A mobile-first PWA for scoring the **Lost Cities** card game. Two input modes: p
 |---|---|
 | Home route (server shell, Cache Components) | `src/app/page.tsx` |
 | Home client UI (dashboard / empty state) | `src/app/home-page-client.tsx` |
-| Score route (server shell; `?method=photo` \| `manual` skips picker) | `src/app/score/page.tsx` |
-| Score client UI (photo / manual flow) | `src/app/score/score-page-client.tsx` |
+| Score index (pick photo vs manual) | `src/app/score/page.tsx` |
+| Score photo flow (board scan entry) | `src/app/score/photo/page.tsx` |
+| Score manual flow (card entry) | `src/app/score/manual/page.tsx` |
+| Score client UI (shared steps) | `src/app/score/score-page-client.tsx` |
 | Cached static marketing blocks (`use cache` + `cacheLife('max')`) | `src/components/cached-marketing-blocks.tsx` |
 | Cached site footer (`use cache` + `cacheLife('days')`) | `src/components/site-footer.tsx` |
 | Root layout | `src/app/layout.tsx` |
