@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+footer-screenshot.png
 package-lock.json
 
 # debug
