@@ -47,6 +47,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const year = new Date().getFullYear();
+
   return (
     <html
       lang="en"
@@ -56,15 +58,17 @@ export default function RootLayout({
         <GameProvider>
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
           <footer className="shrink-0 border-t border-border/50 px-4 py-3 text-center text-xs text-muted-foreground">
-            <span>Created by </span>
-            <a
-              href="https://gattey.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground/90 underline-offset-2 transition-colors hover:text-foreground hover:underline"
-            >
-              Dylan Gattey
-            </a>
+            <p>
+              <span>© {year}. Created by </span>
+              <a
+                href="https://gattey.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground/90 underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              >
+                Dylan Gattey
+              </a>
+            </p>
           </footer>
         </GameProvider>
       </body>
