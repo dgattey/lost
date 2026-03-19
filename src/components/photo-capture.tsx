@@ -67,7 +67,7 @@ export function PhotoCapture({ onAnalyze, isAnalyzing }: PhotoCaptureProps) {
       />
 
       {!preview ? (
-        <div className="flex flex-col gap-4 w-full max-w-sm">
+        <div className="flex w-full min-w-0 flex-col gap-4">
           <div className="flex flex-col items-center gap-2 py-12 px-6 border-2 border-dashed border-muted-foreground/25 rounded-2xl">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-2">
               <Camera className="w-8 h-8 text-muted-foreground" />
@@ -98,7 +98,7 @@ export function PhotoCapture({ onAnalyze, isAnalyzing }: PhotoCaptureProps) {
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-4 w-full max-w-sm">
+        <div className="flex w-full min-w-0 flex-col gap-4">
           {/* Image preview */}
           <div className="relative rounded-2xl overflow-hidden border border-border">
             {/* eslint-disable-next-line @next/next/no-img-element */}

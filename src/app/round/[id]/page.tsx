@@ -35,9 +35,9 @@ export default function RoundDetailPage({
 
   if (!round) {
     return (
-      <div className="min-h-dvh flex flex-col bg-background">
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
         <AppHeader backHref="/" title="Round Not Found" />
-        <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
+        <main className="mx-auto flex min-h-0 w-full max-w-lg min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6">
           <div className="text-center pt-12">
             <div className="text-4xl mb-4">🔍</div>
             <h2 className="text-lg font-bold mb-2">Round not found</h2>
@@ -69,12 +69,12 @@ export default function RoundDetailPage({
 
   if (editing) {
     return (
-      <div className="min-h-dvh flex flex-col bg-background">
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
         <AppHeader
           onBack={() => setEditing(false)}
           title={`Edit Round ${roundNumber}`}
         />
-        <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
+        <main className="mx-auto flex min-h-0 w-full max-w-lg min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6">
           <div className="flex flex-col gap-4">
             <div className="text-center py-2">
               <h2 className="text-lg font-bold">Edit Cards</h2>
@@ -96,9 +96,9 @@ export default function RoundDetailPage({
   }
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <AppHeader backHref="/" title={`Round ${roundNumber}`} />
-      <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
+      <main className="mx-auto flex min-h-0 w-full max-w-lg min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6">
         <div className="flex flex-col gap-4">
           {/* Round metadata */}
           <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">

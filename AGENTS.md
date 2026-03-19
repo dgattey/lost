@@ -8,7 +8,15 @@ A mobile-first PWA for scoring the **Lost Cities** card game. Two input modes: p
 
 | Purpose | Path |
 |---|---|
-| Home page (single-page flow) | `src/app/page.tsx` |
+| Home route (server shell, Cache Components) | `src/app/page.tsx` |
+| Home client UI (dashboard / empty state) | `src/app/home-page-client.tsx` |
+| Score index (pick photo vs manual) | `src/app/score/page.tsx` |
+| Score photo flow (board scan entry) | `src/app/score/photo/page.tsx` |
+| Score manual flow (card entry) | `src/app/score/manual/page.tsx` |
+| Score client UI (shared steps) | `src/app/score/score-page-client.tsx` |
+| Score route wrappers (remount on `rounds.length` so new rounds reset state) | `src/app/score/score-index-route.tsx`, `score-photo-route.tsx`, `score-manual-route.tsx` |
+| Cached static marketing blocks (`use cache` + `cacheLife('max')`) | `src/components/cached-marketing-blocks.tsx` |
+| Cached site footer (`use cache` + `cacheLife('days')`) | `src/components/site-footer.tsx` |
 | Root layout | `src/app/layout.tsx` |
 | Global styles + expedition color classes | `src/app/globals.css` |
 | Manual scoring UI (player tabs) | `src/components/manual-entry.tsx` |
@@ -45,6 +53,10 @@ A mobile-first PWA for scoring the **Lost Cities** card game. Two input modes: p
 ## Environment Variables
 
 - `GEMINI_API_KEY` – required for photo scanning (Gemini API)
+
+## Manual QA
+
+- Score flow vs round **edit** behavior and a full checklist: `docs/manual-test-walkthrough.md`
 
 ## Commands
 

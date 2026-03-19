@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SiteFooter } from "@/components/site-footer";
 import { GameProvider } from "@/lib/game-context";
 import "./globals.css";
 
@@ -52,8 +53,13 @@ export default function RootLayout({
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable}`}
     >
-      <body className="antialiased">
-        <GameProvider>{children}</GameProvider>
+      <body className="antialiased flex min-h-dvh flex-col">
+        <GameProvider>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            <SiteFooter />
+          </div>
+        </GameProvider>
       </body>
     </html>
   );

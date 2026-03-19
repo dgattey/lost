@@ -17,7 +17,7 @@ export function AppHeader({
 }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-      <div className="flex items-center h-14 px-4 max-w-lg mx-auto">
+      <div className="mx-auto flex h-14 w-full max-w-lg items-center px-4">
         {(backHref || onBack) && (
           <>
             {backHref ? (
