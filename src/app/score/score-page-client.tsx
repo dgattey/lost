@@ -237,21 +237,21 @@ export function ScorePageClient({
         title={`Score Round ${rounds.length + 1}`}
       />
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full">
+      <main className="mx-auto flex min-h-0 w-full max-w-lg min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6">
         {/* START (bookmark / bare /score only) */}
         {step === "start" && (
-          <div className="flex flex-col items-center gap-5 pt-4">
-            <div className="text-center">
+          <div className="flex w-full min-w-0 flex-col gap-5 pt-4">
+            <div className="w-full text-center">
               <div className="text-4xl mb-3">🗺️</div>
               <h2 className="text-xl font-bold mb-1.5">
                 Round {rounds.length + 1}
               </h2>
-              <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+              <p className="mx-auto text-muted-foreground text-sm max-w-xs">
                 Photo scan or manual entry — same as from the home screen.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 w-full max-w-sm">
+            <div className="flex w-full min-w-0 flex-col gap-3">
               <Link
                 href="/score/photo"
                 className={cn(
@@ -280,9 +280,9 @@ export function ScorePageClient({
 
         {/* CAPTURE */}
         {(step === "capture" || step === "analyzing") && (
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex w-full min-w-0 flex-col gap-4">
             {error && (
-              <div className="w-full max-w-sm p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+              <div className="w-full min-w-0 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                 <p className="font-medium">Analysis failed</p>
                 <p className="mt-1 text-destructive/80">{error}</p>
                 <Button

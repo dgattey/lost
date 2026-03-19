@@ -32,7 +32,10 @@ function RoundCard({ round }: { round: RoundData }) {
   );
 
   return (
-    <Link href={`/round/${round.roundNumber}`}>
+    <Link
+      href={`/round/${round.roundNumber}`}
+      className="block w-full min-w-0"
+    >
       <Card className="w-full transition-all hover:bg-accent/50 active:scale-[0.98]">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
@@ -156,7 +159,7 @@ function RoundCard({ round }: { round: RoundData }) {
 
 function EmptyState({ hero }: { hero: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-6 pt-4">{hero}</div>
+    <div className="flex w-full min-w-0 flex-col gap-6 pt-4">{hero}</div>
   );
 }
 
@@ -168,9 +171,9 @@ function GameDashboard() {
   const isP2Leading = totalScores.player2 > totalScores.player1;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex w-full min-w-0 flex-col gap-5">
       {/* Total Score Banner */}
-      <div className="rounded-2xl bg-gradient-to-br from-card to-card/80 border border-border p-5">
+      <div className="w-full rounded-2xl bg-gradient-to-br from-card to-card/80 border border-border p-5">
         <div className="text-center mb-4">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Game Total — {rounds.length}{" "}
@@ -238,7 +241,7 @@ function GameDashboard() {
       </div>
 
       {/* Round History */}
-      <div>
+      <div className="w-full min-w-0">
         <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
           Rounds
         </h3>
@@ -250,14 +253,14 @@ function GameDashboard() {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-3">
-        <Link href="/score/photo" className="w-full">
+      <div className="flex w-full min-w-0 flex-col gap-3">
+        <Link href="/score/photo" className="block w-full min-w-0">
           <Button size="lg" className="w-full h-14 text-base gap-2">
             <Camera className="w-5 h-5" />
             Scan board — Round {rounds.length + 1}
           </Button>
         </Link>
-        <Link href="/score/manual" className="w-full">
+        <Link href="/score/manual" className="block w-full min-w-0">
           <Button
             size="lg"
             variant="outline"
@@ -297,15 +300,15 @@ export function HomePageClient({
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <AppHeader />
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full">
+      <main className="mx-auto flex min-h-0 w-full max-w-lg min-w-0 flex-1 flex-col overflow-y-auto px-4 py-6">
         {hasRounds ? <GameDashboard /> : <EmptyState hero={emptyHero} />}
 
         {/* Purple expedition toggle */}
-        <div className="mt-6">
+        <div className="mt-6 w-full min-w-0">
           <button
             type="button"
             onClick={() => setIncludePurple(!includePurple)}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card w-full max-w-sm mx-auto transition-colors hover:bg-accent"
+            className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
           >
             <span className="text-lg">🔮</span>
             <div className="flex-1 text-left">

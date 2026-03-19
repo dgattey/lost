@@ -24,7 +24,7 @@ export async function CachedHomeHero() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 w-full max-w-sm">
+      <div className="flex w-full min-w-0 flex-col gap-3">
         <Link href="/score/photo" className={primaryCtaClasses}>
           <Camera className="w-5 h-5" />
           Scan Board Photo
